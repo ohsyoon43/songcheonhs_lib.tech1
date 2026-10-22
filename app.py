@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 import sqlite3
+import io
 
 # ==========================================
-# 1. 데이터베이스(SQLite) 연결 및 초기화 (영구 기록 저장)
+# 1. 데이터베이스(SQLite) 연결 및 초기화
 # ==========================================
 def get_db_connection():
     conn = sqlite3.connect('library_system.db', check_same_thread=False)
@@ -13,7 +14,6 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
-    # 행사 테이블
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,7 +22,6 @@ def init_db():
             created_at TEXT NOT NULL
         )
     ''')
-    # 참여자 테이블
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS participants (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +35,6 @@ def init_db():
             operator TEXT NOT NULL
         )
     ''')
-    # 처리 이력(Audit Log) 테이블
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,7 +49,7 @@ def init_db():
 
 init_db()
 
-# 데이터 조작 헬퍼 함수들
+# DB 쿼리 함수들
 def db_get_events():
     conn = get_db_connection()
     df = pd.read_sql("SELECT * FROM events ORDER BY id DESC", conn)
@@ -94,6 +92,24 @@ def db_add_participant(data):
     conn.commit()
     conn.close()
 
+def db_delete_participant(part_id):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM participants WHERE id = ?", (part_id,))
+    conn.commit()
+    conn.close()
+
+def db_update_participant(part_id, event_name, student_id, grade, class_num, number, name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        UPDATE participants 
+        SET event_name = ?, student_id = ?, grade = ?, class = ?, number = ?, name = ?
+        WHERE id = ?
+    ''', (event_name, student_id, grade, class_num, number, name, part_id))
+    conn.commit()
+    conn.close()
+
 def db_add_log(category, detail, operator):
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -120,8 +136,6 @@ st.markdown("""
         background-color: #F8F9FA;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
-    
-    /* 중앙 정렬 카드 컨테이너 */
     .center-card {
         background-color: #FFFFFF;
         border-radius: 20px;
@@ -131,16 +145,14 @@ st.markdown("""
         max-width: 520px;
         margin: 40px auto;
     }
-    
-    /* 토스 블루 포인트 버튼 */
     .stButton>button {
         width: 100%;
         background-color: #3182F6 !important;
         color: white !important;
         border-radius: 12px !important;
         border: none !important;
-        height: 50px !important;
-        font-size: 16px !important;
+        height: 48px !important;
+        font-size: 15px !important;
         font-weight: 700 !important;
         box-shadow: 0 4px 12px rgba(49, 130, 246, 0.2) !important;
         transition: all 0.2s ease !important;
@@ -149,15 +161,11 @@ st.markdown("""
         background-color: #1B64DA !important;
         transform: translateY(-1px);
     }
-    
-    /* 보조 버튼 스타일 */
     .sub-btn > button {
         background-color: #E5E8EB !important;
         color: #4E5968 !important;
         box-shadow: none !important;
     }
-
-    /* 일반 카드 */
     .toss-card {
         background-color: #FFFFFF;
         border-radius: 16px;
@@ -166,8 +174,6 @@ st.markdown("""
         border: 1px solid #E5E8EB;
         margin-bottom: 20px;
     }
-    
-    /* 상단 요약 바 */
     .top-summary-bar {
         background: #FFFFFF;
         border-radius: 12px;
@@ -181,8 +187,6 @@ st.markdown("""
         align-items: center;
         box-shadow: 0 2px 6px rgba(0,0,0,0.02);
     }
-    
-    /* 지표 카드 */
     .metric-card {
         background: #FFFFFF;
         border-radius: 16px;
@@ -205,15 +209,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 3. 세션 상태 관리 (로그인 권한 유지용)
+# 3. 세션 상태 관리
 # ==========================================
 if 'user_role' not in st.session_state:
-    st.session_state.user_role = None  # None, 'participant', 'staff'
+    st.session_state.user_role = None  # None, 'participant', 'staff_login', 'staff'
 
 if 'staff_info' not in st.session_state:
     st.session_state.staff_info = None
 
-# 학번 자동 파싱 함수 (5자리 -> 학년, 반, 번호)
 def parse_student_id(std_id):
     std_str = str(std_id).strip()
     if len(std_str) == 5 and std_str.isdigit():
@@ -224,7 +227,7 @@ def parse_student_id(std_id):
     return False, None, None, None
 
 # ==========================================
-# 4. 진입 화면 (일반 참여자 vs 도서관 관계자 선택)
+# 4. 진입 화면
 # ==========================================
 if st.session_state.user_role is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -290,11 +293,10 @@ elif st.session_state.user_role == 'staff_login':
                 st.session_state.user_role = None
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
-            
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
-# 6. 일반 참여자 전용 화면 (학원 등원 시스템 스타일)
+# 6. 일반 참여자 전용 화면
 # ==========================================
 elif st.session_state.user_role == 'participant':
     top_l, top_r = st.columns([8, 2])
@@ -312,14 +314,11 @@ elif st.session_state.user_role == 'participant':
         st.markdown('<div class="center-card">', unsafe_allow_html=True)
         
         df_events = db_get_events()
-        active_events_list = []
         all_events_list = []
         if not df_events.empty:
             for _, row in df_events.iterrows():
                 item_str = f"[{row['status']}] {row['name']}"
                 all_events_list.append(item_str)
-                if row['status'] == "진행 중":
-                    active_events_list.append(item_str)
                     
         selected_event_str = st.selectbox("참여할 행사 선택", all_events_list if all_events_list else ["등록된 행사 없음"])
         
@@ -374,10 +373,10 @@ elif st.session_state.user_role == 'staff':
         st.markdown('</div>', unsafe_allow_html=True)
             
     st.markdown("<br>", unsafe_allow_html=True)
-    tab_nav1, tab_nav2, tab_nav3, tab_nav4 = st.tabs(["참여자 등록", "행사 생성 및 관리", "통계 대시보드", "처리 이력 (Audit Log)"])
+    tab_nav1, tab_nav2, tab_nav3, tab_nav4, tab_nav5 = st.tabs(["참여자 등록", "행사 생성 및 관리", "통계 대시보드", "처리 이력 (Audit Log)", "시스템 백업/복원"])
     
     # --------------------------------------
-    # 탭 1: 참여자 등록 (PC/아이패드 1:3 대출 시스템 레이아웃)
+    # 탭 1: 참여자 등록 (요청하신 학번/이름 검색 우선 워크플로우 적용)
     # --------------------------------------
     with tab_nav1:
         df_all_p = db_get_participants()
@@ -394,17 +393,46 @@ elif st.session_state.user_role == 'staff':
             </div>
         """, unsafe_allow_html=True)
         
-        left_col, right_col = st.columns([1, 2.8])
+        left_col, right_col = st.columns([1, 2.5])
         
         with left_col:
             st.markdown('<div class="toss-card">', unsafe_allow_html=True)
-            st.markdown("<h4>참여자 등록</h4>", unsafe_allow_html=True)
+            st.markdown("<h4>1. 학생 검색 및 정보 확인</h4>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:13px; color:#8B95A1;'>먼저 학번과 이름을 입력해 주세요.</p>", unsafe_allow_html=True)
+            
+            search_std_id = st.text_input("학번 입력 (5자리)", key="staff_search_id", placeholder="예: 10101")
+            search_name = st.text_input("이름 입력", key="staff_search_name", placeholder="예: 김송천")
+            
+            student_history = []
+            is_valid_student = False
+            grade, class_num, number = None, None, None
+            
+            if search_std_id.strip() and search_name.strip():
+                is_valid_student, grade, class_num, number = parse_student_id(search_std_id)
+                if is_valid_student and not df_all_p.empty:
+                    student_history = df_all_p[df_all_p['student_id'] == search_std_id.strip()].to_dict('records')
+            
+            st.markdown("---")
+            st.markdown("<h5>과거 참여 이력</h5>", unsafe_allow_html=True)
+            if search_std_id.strip():
+                if student_history:
+                    st.success(f"총 {len(student_history)}건의 참여 이력이 있습니다.")
+                    for hist in student_history:
+                        st.markdown(f"- **{hist['event_name']}** ({hist['timestamp']})")
+                else:
+                    st.info("이 학생의 과거 참여 이력이 없습니다.")
+            else:
+                st.markdown("<span style='color:#8B95A1; font-size:13px;'>학번을 입력하면 과거 참여 기록이 표시됩니다.</span>", unsafe_allow_html=True)
+                
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with right_col:
+            st.markdown('<div class="toss-card">', unsafe_allow_html=True)
+            st.markdown("<h4>2. 행사 선택 및 참여 등록</h4>", unsafe_allow_html=True)
+            st.markdown("<p style='font-size:13px; color:#8B95A1;'>이전 참여 이력 유무와 관계없이 행사를 선택하여 등록할 수 있습니다.</p>", unsafe_allow_html=True)
             
             all_events_list = [f"[{row['status']}] {row['name']}" for _, row in df_events.iterrows()] if not df_events.empty else ["등록된 행사 없음"]
-            selected_event_str = st.selectbox("행사 선택", all_events_list)
-            
-            std_id_in = st.text_input("학번 (5자리)", key="staff_std_in", placeholder="예: 10101")
-            name_in = st.text_input("이름", key="staff_name_in", placeholder="예: 김송천")
+            selected_event_str = st.selectbox("등록할 행사 선택", all_events_list)
             
             with st.expander("일시 수동 지정 (소급 등록)"):
                 c_date = st.date_input("날짜 선택", date.today())
@@ -412,62 +440,66 @@ elif st.session_state.user_role == 'staff':
                 custom_datetime_str = f"{c_date} {c_time.strftime('%H:%M:%S')}"
             
             st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-            if st.button("등록하기"):
-                is_v, grade, class_num, number = parse_student_id(std_id_in)
+            if st.button("선택한 행사로 참여 등록 완료"):
                 if not selected_event_str or "행사 없음" in selected_event_str:
                     st.error("행사를 선택해 주세요.")
-                elif not is_v or not name_in.strip():
-                    st.error("올바른 5자리 학번(예: 10101)과 이름을 입력해 주세요.")
+                elif not is_valid_student or not search_name.strip():
+                    st.error("왼쪽에 올바른 5자리 학번(예: 10101)과 이름을 먼저 입력해 주세요.")
                 else:
                     event_clean = selected_event_str.split("] ")[-1] if "]" in selected_event_str else selected_event_str
                     reg_time = custom_datetime_str if custom_datetime_str else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     
                     new_entry = {
                         "event_name": event_clean,
-                        "student_id": std_id_in.strip(),
+                        "student_id": search_std_id.strip(),
                         "grade": grade,
                         "class": class_num,
                         "number": number,
-                        "name": name_in.strip(),
+                        "name": search_name.strip(),
                         "timestamp": reg_time,
                         "operator": st.session_state.staff_info
                     }
                     db_add_participant(new_entry)
-                    db_add_log("참여자 등록", f"[{event_clean}] {std_id_in} {name_in} 등록 완료", st.session_state.staff_info)
-                    st.success(f"{name_in.strip()}님 등록 완료!")
+                    db_add_log("참여자 등록", f"[{event_clean}] {search_std_id} {search_name} 등록 완료", st.session_state.staff_info)
+                    st.success(f"{search_name.strip()}님({search_std_id})의 [{event_clean}] 참여가 등록되었습니다!")
                     st.rerun()
                     
             st.markdown('</div>', unsafe_allow_html=True)
             
-        with right_col:
+            # 당일 참여 이력 및 수정/삭제 관리 영역
             st.markdown('<div class="toss-card">', unsafe_allow_html=True)
-            st.markdown("<h4>참여 이력 조회 (도서 대출 시스템 방식)</h4>", unsafe_allow_html=True)
+            st.markdown("<h4>당일 참여 이력 관리 (수정 및 삭제 가능)</h4>", unsafe_allow_html=True)
             
-            filter_c1, filter_c2 = st.columns([1, 1.5])
-            with filter_c1:
-                search_date = st.date_input("조회 날짜 선택", date.today())
-            with filter_c2:
-                search_kw = st.text_input("학번 또는 이름 검색", placeholder="예: 10101 또는 김송천")
-                
             if not df_all_p.empty:
-                search_date_str = search_date.strftime("%Y-%m-%d")
-                df_filtered = df_all_p[df_all_p['timestamp'].str.startswith(search_date_str)]
-                
-                if search_kw.strip():
-                    df_filtered = df_filtered[
-                        df_filtered['student_id'].str.contains(search_kw.strip()) |
-                        df_filtered['name'].str.contains(search_kw.strip())
-                    ]
-                    
-                if not df_filtered.empty:
-                    disp_df = df_filtered[['timestamp', 'event_name', 'student_id', 'grade', 'class', 'number', 'name', 'operator']].copy()
-                    disp_df.columns = ['참여 일시', '행사명', '학번', '학년', '반', '번호', '이름', '처리 담당자']
-                    st.dataframe(disp_df.sort_values(by='참여 일시', ascending=False), use_container_width=True, hide_index=True)
+                df_today = df_all_p[df_all_p['timestamp'].str.startswith(today_str)]
+                if not df_today.empty:
+                    for _, row in df_today.iterrows():
+                        c_info, c_del, c_edit = st.columns([3, 1, 1])
+                        c_info.write(f"[{row['timestamp']}] **{row['event_name']}** - {row['student_id']} {row['name']}")
+                        
+                        # 삭제 버튼
+                        if c_del.button("삭제", key=f"del_{row['id']}"):
+                            db_delete_participant(row['id'])
+                            db_add_log("데이터 삭제", f"참여자 ID {row['id']} ({row['student_id']} {row['name']}) 삭제됨", st.session_state.staff_info)
+                            st.rerun()
+                            
+                        # 수정 기능 (Expander 활용)
+                        with c_edit.expander("수정"):
+                            mod_name = st.text_input("이름", value=row['name'], key=f"m_name_{row['id']}")
+                            mod_std = st.text_input("학번", value=row['student_id'], key=f"m_std_{row['id']}")
+                            if st.button("저장", key=f"m_save_{row['id']}"):
+                                v_ok, g, cl, num = parse_student_id(mod_std)
+                                if v_ok and mod_name.strip():
+                                    db_update_participant(row['id'], row['event_name'], mod_std.strip(), g, cl, num, mod_name.strip())
+                                    db_add_log("데이터 수정", f"참여자 ID {row['id']} 수정 완료", st.session_state.staff_info)
+                                    st.success("수정 완료!")
+                                    st.rerun()
+                                else:
+                                    st.error("형식 오류")
                 else:
-                    st.info("해당 조건의 참여 기록이 없습니다.")
+                    st.info("오늘 등록된 참여 기록이 없습니다.")
             else:
-                st.info("등록된 참여 데이터가 없습니다.")
-                
+                st.info("등록된 데이터가 없습니다.")
             st.markdown('</div>', unsafe_allow_html=True)
 
     # --------------------------------------
@@ -505,15 +537,14 @@ elif st.session_state.user_role == 'staff':
                         st.rerun()
             else:
                 st.info("생성된 행사가 없습니다. 왼쪽에서 새 행사를 만들어주세요.")
-                    
         st.markdown('</div>', unsafe_allow_html=True)
 
     # --------------------------------------
-    # 탭 3: 통계 대시보드
+    # 탭 3: 통계 대시보드 (시각화 차트 추가)
     # --------------------------------------
     with tab_nav3:
         st.markdown('<div class="toss-card">', unsafe_allow_html=True)
-        st.markdown("<h4>통합 통계 대시보드</h4>", unsafe_allow_html=True)
+        st.markdown("<h4>통합 통계 대시보드 및 시각화</h4>", unsafe_allow_html=True)
         
         df_all = db_get_participants()
         if df_all.empty:
@@ -526,7 +557,11 @@ elif st.session_state.user_role == 'staff':
             m4.markdown(f'<div class="metric-card"><div class="metric-val">{df_all["class"].value_counts().idxmax()}반</div><div class="metric-lbl">최다 참여 반</div></div>', unsafe_allow_html=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("##### 행사별 참여자 시각화 차트")
+            event_counts = df_all['event_name'].value_counts()
+            st.bar_chart(event_counts)
             
+            st.markdown("<br>", unsafe_allow_html=True)
             t1, t2, t3, t4 = st.tabs(["행사별 통계", "학년별 통계", "반별 통계", "날짜별 통계"])
             with t1:
                 st.dataframe(df_all['event_name'].value_counts().reset_index().rename(columns={'index':'행사명', 'event_name':'참여자 수'}), use_container_width=True, hide_index=True)
@@ -544,9 +579,8 @@ elif st.session_state.user_role == 'staff':
                 label="통계 데이터 CSV 파일 다운로드",
                 data=csv_data,
                 file_name=f"도서관_행사_참여통계_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/css" if False else "text/csv"
+                mime="text/csv"
             )
-            
         st.markdown('</div>', unsafe_allow_html=True)
 
     # --------------------------------------
@@ -560,7 +594,7 @@ elif st.session_state.user_role == 'staff':
         if df_l.empty:
             st.info("기록된 처리 이력이 없습니다.")
         else:
-            lt1, lt2, lt3, lt4 = st.tabs(["행사 생성 기록", "참여자 등록 기록", "시스템 접속 기록", "상태 변경 기록"])
+            lt1, lt2, lt3, lt4 = st.tabs(["행사 생성 기록", "참여자 등록 기록", "시스템 접속 기록", "기타 변경 기록"])
             with lt1:
                 st.dataframe(df_l[df_l['category'] == '행사 생성'], use_container_width=True, hide_index=True)
             with lt2:
@@ -568,6 +602,34 @@ elif st.session_state.user_role == 'staff':
             with lt3:
                 st.dataframe(df_l[df_l['category'] == '시스템 접속'], use_container_width=True, hide_index=True)
             with lt4:
-                st.dataframe(df_l[df_l['category'] == '행사 상태 변경'], use_database_view:=True if False else df_l[df_l['category'] == '행사 상태 변경'], use_container_width=True, hide_index=True)
-                
+                st.dataframe(df_l[~df_l['category'].isin(['행사 생성', '참여자 등록', '시스템 접속'])], use_container_width=True, hide_index=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # --------------------------------------
+    # 탭 5: 시스템 백업 및 복원 (데이터 유실 방지)
+    # --------------------------------------
+    with tab_nav5:
+        st.markdown('<div class="toss-card">', unsafe_allow_html=True)
+        st.markdown("<h4>데이터베이스 백업 및 복원</h4>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size:14px; color:#8B95A1;'>현재까지 저장된 모든 영구 데이터 파일(`.db`)을 백업하거나 복원할 수 있습니다.</p>", unsafe_allow_html=True)
+        
+        # 백업 버튼
+        with open("library_system.db", "rb") as f:
+            db_bytes = f.read()
+        st.download_button(
+            label="현재 데이터베이스 파일 백업(.db 다운로드)",
+            data=db_bytes,
+            file_name=f"library_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
+            mime="application/octet-stream"
+        )
+        
+        st.markdown("---")
+        st.markdown("##### 데이터베이스 복원 (기존 데이터 교체)")
+        uploaded_db = st.file_uploader("백업해 둔 .db 파일을 업로드하세요", type=["db"])
+        if uploaded_db is not None:
+            if st.button("업로드한 파일로 데이터베이스 복원하기"):
+                with open("library_system.db", "wb") as f:
+                    f.write(uploaded_db.getbuffer())
+                st.success("데이터베이스가 성공적으로 복원되었습니다! 새로고침 해주세요.")
+                db_add_log("시스템 복원", "데이터베이스 파일 복원 완료", st.session_state.staff_info)
         st.markdown('</div>', unsafe_allow_html=True)
