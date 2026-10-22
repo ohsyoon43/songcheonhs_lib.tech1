@@ -135,111 +135,99 @@ def db_clear_logs():
     conn.close()
 
 # ==========================================
-# 2. Pretendard 폰트 및 고가독성 UI CSS
+# 2. 페이지 설정 및 PC 최적화 글로벌 CSS
 # ==========================================
 st.set_page_config(
     page_title="송천 도서관 행정 시스템",
-    page_icon=None,
+    page_icon="📚",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 st.markdown("""
     <style>
     @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
 
+    /* 전체 앱 배경 및 폰트 */
     .stApp {
-        background: linear-gradient(135deg, #EAEFF5 0%, #F4F7FA 100%) !important;
+        background-color: #F8FAFC !important;
         font-family: "Pretendard Variable", Pretendard, sans-serif !important;
-        color: #191F28 !important;
-        font-size: 16px !important;
+        color: #0F172A !important;
     }
 
     html, body, [class*="css"], .stMarkdown, p, div, label, span {
         font-family: "Pretendard Variable", Pretendard, sans-serif !important;
-        color: #191F28;
-        font-size: 15px;
+        color: #1E293B;
     }
 
-    /* 메인 컨테이너 박스 스타일 */
-    .main-box {
-        background: #FFFFFF;
-        border-radius: 24px;
-        padding: 36px 40px;
-        box-shadow: 0 12px 30px rgba(166, 178, 196, 0.18);
-        border: 1px solid rgba(255, 255, 255, 0.9);
-        margin-bottom: 24px;
+    /* 사이드바 스타일링 */
+    [data-testid="stSidebar"] {
+        background-color: #FFFFFF !important;
+        border-right: 1px solid #E2E8F0;
+        padding-top: 20px;
     }
 
-    /* 파란색 버튼 (흰색 텍스트 강제 고정) */
+    /* 메인 버튼 스타일 (선명한 블루 + 흰색 글씨) */
     .stButton>button {
         width: 100%;
-        background: linear-gradient(135deg, #3B82F6 0%, #2563EB) !important;
+        background: #2563EB !important;
         color: #FFFFFF !important;
-        border-radius: 14px !important;
+        border-radius: 10px !important;
         border: none !important;
-        height: 50px !important;
-        font-size: 16px !important;
+        height: 46px !important;
+        font-size: 15px !important;
         font-weight: 700 !important;
-        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25) !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2) !important;
         transition: all 0.2s ease !important;
     }
     .stButton>button span, .stButton>button p {
         color: #FFFFFF !important;
-        font-size: 16px !important;
+        font-size: 15px !important;
     }
     .stButton>button:hover {
+        background: #1D4ED8 !important;
         transform: translateY(-1px);
-        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.35) !important;
     }
 
-    /* 서브 회색 버튼 */
-    .sub-btn > button {
-        background: #E2E8F0 !important;
-        color: #334155 !important;
-        box-shadow: none !important;
-    }
-    .sub-btn > button span {
-        color: #334155 !important;
-    }
-
-    /* 상단 네비게이션 바 */
-    .nav-pill {
-        background: rgba(255, 255, 255, 0.9);
-        backdrop-filter: blur(12px);
-        border-radius: 40px;
-        padding: 12px 28px;
-        box-shadow: 0 6px 20px rgba(149, 160, 175, 0.12);
-        border: 1px solid #FFFFFF;
-        margin-bottom: 24px;
-    }
-
-    .badge-pill {
-        display: inline-block;
-        padding: 6px 16px;
-        background: #E0EDFF;
-        color: #2563EB;
-        border-radius: 20px;
-        font-size: 13px;
-        font-weight: 700;
-        margin-bottom: 14px;
-    }
-
+    /* 입력 폼 필드 스타일 */
     .stTextInput input, .stSelectbox select {
-        border-radius: 12px !important;
+        border-radius: 10px !important;
         border: 1px solid #CBD5E1 !important;
-        background-color: #FAFAFA !important;
-        color: #111827 !important;
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
         font-size: 15px !important;
-        font-weight: 600 !important;
-        height: 46px !important;
+        font-weight: 500 !important;
+        height: 44px !important;
     }
 
-    h1 { font-size: 32px !important; color: #111827 !important; font-weight: 800 !important; }
-    h2 { font-size: 26px !important; color: #111827 !important; font-weight: 800 !important; }
-    h3 { font-size: 22px !important; color: #111827 !important; font-weight: 800 !important; }
-    h4 { font-size: 18px !important; color: #111827 !important; font-weight: 700 !important; }
-    h5 { font-size: 16px !important; color: #111827 !important; font-weight: 700 !important; }
+    /* 대시보드 지표 카드 스타일 */
+    .metric-box {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 14px;
+        padding: 20px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+        text-align: center;
+    }
+    .metric-num {
+        font-size: 28px;
+        font-weight: 800;
+        color: #2563EB;
+        margin-top: 4px;
+    }
+    .metric-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* 타이틀 크기 고정 */
+    h1 { font-size: 28px !important; font-weight: 800 !important; color: #0F172A !important; }
+    h2 { font-size: 24px !important; font-weight: 800 !important; color: #0F172A !important; }
+    h3 { font-size: 20px !important; font-weight: 700 !important; color: #0F172A !important; }
+    h4 { font-size: 16px !important; font-weight: 700 !important; color: #0F172A !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -253,117 +241,109 @@ def parse_student_id(std_id):
     return False, None, None, None
 
 # ==========================================
-# 3. 세션 상태 관리
+# 3. 사이드바 네비게이션 및 시스템 제어
 # ==========================================
+st.sidebar.markdown("### 🏛️ 송천고 도서관 시스템")
+st.sidebar.markdown("<p style='font-size: 13px; color: #64748B; margin-top: -10px;'>Library Event & Attendance</p>", unsafe_allow_html=True)
+st.sidebar.markdown("---")
+
 if 'user_role' not in st.session_state:
     st.session_state.user_role = None
-
 if 'staff_info' not in st.session_state:
     st.session_state.staff_info = None
 
-# 상단 아일랜드 네비게이션
-st.markdown("""
-    <div class="nav-pill" style="display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 20px; font-weight: 800; color: #111827;">Songcheon Lib Tech</span>
-        <span style="font-size: 14px; font-weight: 600; color: #4B5563;">인천송천고등학교 도서관 행정 시스템</span>
-    </div>
-""", unsafe_allow_html=True)
+# 사이드바 메뉴 선택
+menu_mode = st.sidebar.radio(
+    "접속 메뉴 선택", 
+    ["🏠 홈 (메인 화면)", "📝 학생 참여 등록 (키오스크)", "🔑 도서관 관리자 시스템"],
+    index=0
+)
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("<p style='font-size: 12px; color: #94A3B8; text-align: center;'>Incheon Songcheon High School<br>Library Management System v2.0</p>", unsafe_allow_html=True)
+
+# 메뉴 모드에 따른 세션 동기화
+if menu_mode == "🏠 홈 (메인 화면)":
+    st.session_state.user_role = None
+elif menu_mode == "📝 학생 참여 등록 (키오스크)":
+    st.session_state.user_role = 'participant'
+elif menu_mode == "🔑 도서관 관리자 시스템":
+    if st.session_state.user_role != 'staff':
+        st.session_state.user_role = 'staff_login'
 
 # ==========================================
-# 4. 메인 진입 화면
+# 4. 화면별 렌더링 (PC 최적화 대시보드)
 # ==========================================
+
+# ------------------------------------------
+# [홈 화면]
+# ------------------------------------------
 if st.session_state.user_role is None:
-    col1, col2, col3 = st.columns([1, 1.2, 1])
-    with col2:
-        st.markdown("""
-            <div class="main-box" style="text-align: center; margin-top: 30px;">
-                <div class="badge-pill">LIBRARY SYSTEM</div>
-                <h1>인천송천고 도서관</h1>
-                <p style="color: #4B5563; font-size: 16px; margin-top: 8px; margin-bottom: 30px; font-weight: 500;">행사 출석 등록 및 통합 데이터 관리 시스템</p>
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("# 📚 인천송천고등학교 도서관")
+    st.markdown("도서관 행사 참여 출석 확인 및 통합 데이터 관리 시스템에 오신 것을 환영합니다.")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 상단 요약 지표 카드
+    df_all_p = db_get_participants()
+    df_events = db_get_events()
+    total_participants = len(df_all_p) if not df_all_p.empty else 0
+    active_events = len(df_events[df_events['status'] == '진행 중']) if not df_events.empty else 0
+    total_events = len(df_events) if not df_events.empty else 0
+
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        st.markdown(f"""
+            <div class="metric-box">
+                <div class="metric-label">누적 총 참여 건수</div>
+                <div class="metric-num">{total_participants}명</div>
             </div>
         """, unsafe_allow_html=True)
-        
-        if st.button("학생 / 일반 참여자 등록"):
+    with col_m2:
+        st.markdown(f"""
+            <div class="metric-box">
+                <div class="metric-label">진행 중인 행사</div>
+                <div class="metric-num" style="color: #10B981;">{active_events}개</div>
+            </div>
+        """, unsafe_allow_html=True)
+    with col_m3:
+        st.markdown(f"""
+            <div class="metric-box">
+                <div class="metric-label">등록된 전체 행사</div>
+                <div class="metric-num" style="color: #6366F1;">{total_events}개</div>
+            </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    # 빠른 진입 카드 영역
+    col_c1, col_c2 = st.columns(2, gap="large")
+    with col_c1:
+        st.markdown("### 📝 학생 참여 등록")
+        st.markdown("도서관 행사에 참여한 학생분들께서 직접 학번과 이름을 입력하여 출석을 등록하는 공간입니다.")
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("학생 참여 등록 페이지로 이동하기"):
             st.session_state.user_role = 'participant'
             st.rerun()
-        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
-        if st.button("사서교사 & 도서부원 관리자 로그인"):
+            
+    with col_c2:
+        st.markdown("### 🔑 도서관 관리자 시스템")
+        st.markdown("사서 선생님 및 도서부원 전용 공간으로, 행사 개설, 출석 관리, 통계 및 백업을 수행합니다.")
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("관리자 로그인 페이지로 이동하기"):
             st.session_state.user_role = 'staff_login'
             st.rerun()
 
-# ==========================================
-# 5. 관리자 로그인 화면
-# ==========================================
-elif st.session_state.user_role == 'staff_login':
-    col1, col2, col3 = st.columns([1, 1.2, 1])
-    with col2:
-        st.markdown("""
-            <div class="main-box" style="margin-top: 30px;">
-                <div class="badge-pill">ADMIN AUTH</div>
-                <h2>관리자 인증</h2>
-                <p style="color: #4B5563; font-size: 15px; margin-top: 6px; margin-bottom: 24px;">담당자 정보를 입력 후 시스템에 접속해 주세요.</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        staff_type = st.selectbox("직위 구분", ["도서부원", "사서교사"])
-        
-        if staff_type == "도서부원":
-            staff_std_id = st.text_input("학번 (5자리)", placeholder="예: 10101")
-            staff_name = st.text_input("이름", placeholder="예: 김송천")
-        else:
-            staff_std_id = "교직원"
-            staff_name = st.text_input("이름", placeholder="예: 담당선생님")
-            
-        st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
-        c_btn1, c_btn2 = st.columns(2)
-        with c_btn1:
-            if st.button("관리자 접속"):
-                if staff_type == "도서부원":
-                    is_v, _, _, _ = parse_student_id(staff_std_id)
-                    if not is_v or not staff_name.strip():
-                        st.error("올바른 5자리 학번과 이름을 입력해 주세요.")
-                    else:
-                        st.session_state.staff_info = f"도서부원 {staff_std_id} {staff_name.strip()}"
-                        st.session_state.user_role = 'staff'
-                        db_add_log("시스템 접속", f"{st.session_state.staff_info} 접속함", st.session_state.staff_info)
-                        st.rerun()
-                else:
-                    if not staff_name.strip():
-                        st.error("이름을 입력해 주세요.")
-                    else:
-                        st.session_state.staff_info = f"사서교사 {staff_name.strip()}"
-                        st.session_state.user_role = 'staff'
-                        db_add_log("시스템 접속", f"{st.session_state.staff_info} 접속함", st.session_state.staff_info)
-                        st.rerun()
-        with c_btn2:
-            st.markdown('<div class="sub-btn">', unsafe_allow_html=True)
-            if st.button("메인으로"):
-                st.session_state.user_role = None
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-# ==========================================
-# 6. 일반 참여자 전용 화면
-# ==========================================
+# ------------------------------------------
+# [학생 참여 등록 화면]
+# ------------------------------------------
 elif st.session_state.user_role == 'participant':
-    top_l, top_r = st.columns([8, 2])
-    with top_l:
-        st.markdown("<h2>도서관 행사 참여 등록</h2>")
-    with top_r:
-        st.markdown('<div class="sub-btn">', unsafe_allow_html=True)
-        if st.button("메인으로"):
-            st.session_state.user_role = None
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("## 📝 도서관 행사 참여 등록")
+    st.markdown("참여 중이신 행사를 선택하고 학번과 이름을 입력해 주세요.")
+    st.markdown("---")
 
-    col1, col2, col3 = st.columns([1, 1.2, 1])
-    with col2:
-        st.markdown("""
-            <div style="background: #FFFFFF; padding: 20px 24px; border-radius: 16px; margin-top: 15px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                <p style="font-size: 14px; color: #4B5563; margin: 0; font-weight: 500;">💡 참여하실 행사를 선택하고 학번과 이름을 입력해 주세요.</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
+    col_p1, col_p2 = st.columns([1.2, 1], gap="large")
+    with col_p1:
         df_events = db_get_events()
         all_events_list = [f"[{row['status']}] {row['name']}" for _, row in df_events.iterrows()] if not df_events.empty else ["등록된 행사 없음"]
                     
@@ -371,8 +351,8 @@ elif st.session_state.user_role == 'participant':
         std_id_p = st.text_input("학번 입력 (5자리)", placeholder="예: 10101")
         name_p = st.text_input("이름 입력", placeholder="예: 김송천")
         
-        st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
-        if st.button("참여 등록하기"):
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("출석 등록 완료"):
             is_v, grade, class_num, number = parse_student_id(std_id_p)
             
             if not selected_event_str or "행사 없음" in selected_event_str:
@@ -396,38 +376,100 @@ elif st.session_state.user_role == 'participant':
                     "operator": "참여자 본인"
                 })
                 db_add_log("참여자 등록", f"[{event_clean}] {std_id_p} {name_p} 등록 완료", "참여자 본인")
-                st.success(f"등록 완료: {name_p.strip()}님, 정상 등록되었습니다!")
+                st.success(f"🎉 등록 완료: {grade}학년 {class_num}반 {name_p.strip()}님, 정상 등록되었습니다!")
 
-# ==========================================
-# 7. 관계자 메인 행정 시스템
-# ==========================================
+    with col_p2:
+        st.markdown("### 💡 이용 안내")
+        st.info(
+            "1. **학번 형식**: 반드시 5자리 숫자로 입력해 주세요 (예: 1학년 1반 1번 -> `10101`).\n"
+            "2. **행사 상태**: `[진행 중]` 상태인 행사만 참여 등록이 가능합니다.\n"
+            "3. **문의 사항**: 등록에 실패하거나 오류가 발생할 경우 도서관 데스크의 도서부원에게 문의해 주세요."
+        )
+
+# ------------------------------------------
+# [관리자 로그인 화면]
+# ------------------------------------------
+elif st.session_state.user_role == 'staff_login':
+    st.markdown("## 🔑 도서관 관리자 인증")
+    st.markdown("시스템 관리를 위해 담당자 정보를 입력해 주세요.")
+    st.markdown("---")
+
+    col_l1, col_l2 = st.columns([1, 1.2], gap="large")
+    with col_l1:
+        staff_type = st.selectbox("직위 구분", ["도서부원", "사서교사"])
+        
+        if staff_type == "도서부원":
+            staff_std_id = st.text_input("학번 (5자리)", placeholder="예: 10101")
+            staff_name = st.text_input("이름", placeholder="예: 김송천")
+        else:
+            staff_std_id = "교직원"
+            staff_name = st.text_input("이름", placeholder="예: 담당선생님")
+            
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("관리자 시스템 접속"):
+            if staff_type == "도서부원":
+                is_v, _, _, _ = parse_student_id(staff_std_id)
+                if not is_v or not staff_name.strip():
+                    st.error("올바른 5자리 학번과 이름을 입력해 주세요.")
+                else:
+                    st.session_state.staff_info = f"도서부원 {staff_std_id} {staff_name.strip()}"
+                    st.session_state.user_role = 'staff'
+                    db_add_log("시스템 접속", f"{st.session_state.staff_info} 접속함", st.session_state.staff_info)
+                    st.rerun()
+            else:
+                if not staff_name.strip():
+                    st.error("이름을 입력해 주세요.")
+                else:
+                    st.session_state.staff_info = f"사서교사 {staff_name.strip()}"
+                    st.session_state.user_role = 'staff'
+                    db_add_log("시스템 접속", f"{st.session_state.staff_info} 접속함", st.session_state.staff_info)
+                    st.rerun()
+                    
+    with col_l2:
+        st.markdown("### 🔒 보안 및 권한 안내")
+        st.warning(
+            "관리자 권한을 통해 도서관 행사를 개설·마감하고, 학생들의 출석 기록을 수정·삭제할 수 있습니다.\n\n"
+            "작업 완료 후에는 반드시 상단 또는 메뉴에서 로그아웃을 진행해 주세요."
+        )
+
+# ------------------------------------------
+# [관리자 행정 대시보드 시스템]
+# ------------------------------------------
 elif st.session_state.user_role == 'staff':
-    top_col1, top_col2 = st.columns([8, 2])
-    with top_col1:
-        st.markdown(f"<h3>도서관 행정 시스템 &nbsp;|&nbsp; <span style='color:#2563EB; font-size:18px; font-weight:700;'>{st.session_state.staff_info}</span></h3>")
-    with top_col2:
-        st.markdown('<div class="sub-btn">', unsafe_allow_html=True)
+    # 상단 관리자 타이틀 및 로그아웃 바
+    top_c1, top_c2 = st.columns([8, 2])
+    with top_c1:
+        st.markdown(f"## ⚙️ 도서관 행정 대시보드")
+        st.markdown(f"현재 접속 담당자: **{st.session_state.staff_info}**")
+    with top_c2:
         if st.button("로그아웃"):
             st.session_state.user_role = None
             st.session_state.staff_info = None
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
             
-    st.markdown("<br>", unsafe_allow_html=True)
-    tab_nav1, tab_nav2, tab_nav3, tab_nav4, tab_nav5 = st.tabs(["참여자 출석 등록", "행사 개설 및 마감 관리", "통계 대시보드", "처리 이력 (Audit Log)", "백업/복원"])
+    st.markdown("---")
     
-    # 탭 1: 참여자 출석 등록
+    # PC 최적화 상단 탭 네비게이션
+    tab_nav1, tab_nav2, tab_nav3, tab_nav4, tab_nav5 = st.tabs([
+        "📋 참여자 출석 등록 및 관리", 
+        "🏷️ 행사 개설 및 마감 관리", 
+        "📊 통합 통계 대시보드", 
+        "📜 처리 이력 (Audit Log)", 
+        "💾 백업 및 복원"
+    ])
+    
+    # --------------------------------------
+    # 탭 1: 참여자 출석 등록 및 관리
+    # --------------------------------------
     with tab_nav1:
         df_all_p = db_get_participants()
         df_events = db_get_events()
         
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-        left_col, right_col = st.columns([1, 2.2], gap="large")
+        col_s1, col_s2 = st.columns([1, 1.5], gap="large")
         
-        with left_col:
-            st.markdown("<h4>1. 학생 검색</h4>", unsafe_allow_html=True)
-            st.markdown("<p style='font-size: 14px; color: #4B5563;'>학번과 이름을 입력하면 과거 참여 이력이 조회됩니다.</p>", unsafe_allow_html=True)
-            
+        with col_s1:
+            st.markdown("### 1. 학생 검색")
+            st.markdown("학번과 이름을 입력하면 과거 참여 이력이 조회됩니다.")
             search_std_id = st.text_input("학번 입력 (5자리)", key="staff_search_id", placeholder="예: 10101")
             search_name = st.text_input("이름 입력", key="staff_search_name", placeholder="예: 김송천")
             
@@ -441,31 +483,31 @@ elif st.session_state.user_role == 'staff':
                     student_history = df_all_p[df_all_p['student_id'] == search_std_id.strip()].to_dict('records')
             
             st.markdown("<hr style='border-color:#E2E8F0; margin: 20px 0;'>", unsafe_allow_html=True)
-            st.markdown("<h5>과거 참여 이력</h5>", unsafe_allow_html=True)
+            st.markdown("#### 📖 과거 참여 이력 조회결과")
             if search_std_id.strip():
                 if student_history:
-                    st.success(f"총 {len(student_history)}건의 이력이 있습니다.")
+                    st.success(f"총 {len(student_history)}건의 참여 이력이 있습니다.")
                     for hist in student_history:
                         st.markdown(f"- **{hist['event_name']}** ({hist['timestamp']})")
                 else:
                     st.info("과거 참여 이력이 없습니다.")
             else:
-                st.markdown("<p style='font-size: 14px; color: #9CA3AF;'>학번을 입력하면 이력이 표시됩니다.</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color: #94A3B8; font-size: 14px;'>학번을 입력하면 과거 기록이 나타납니다.</p>", unsafe_allow_html=True)
             
-        with right_col:
-            st.markdown("<h4>2. 행사 출석 확인 및 등록</h4>", unsafe_allow_html=True)
-            st.markdown("<p style='font-size: 14px; color: #4B5563;'>이전 참여 이력 유무와 관계없이 행사를 선택하여 등록할 수 있습니다.</p>", unsafe_allow_html=True)
+        with col_s2:
+            st.markdown("### 2. 행사 출석 확인 및 등록")
+            st.markdown("이전 참여 이력 유무와 관계없이 행사를 선택하여 등록할 수 있습니다.")
             
             all_events_list = [f"[{row['status']}] {row['name']}" for _, row in df_events.iterrows()] if not df_events.empty else ["등록된 행사 없음"]
             selected_event_str = st.selectbox("등록할 행사 선택", all_events_list)
             
-            with st.expander("일시 수동 지정 (소급 등록)"):
+            with st.expander("⏱️ 일시 수동 지정 (소급 등록 필요 시)"):
                 c_date = st.date_input("날짜 선택", date.today())
                 c_time = st.time_input("시간 선택", datetime.now().time())
                 custom_datetime_str = f"{c_date} {c_time.strftime('%H:%M:%S')}"
             
-            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-            if st.button("출석 등록 완료"):
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("출석 등록 완료 처리"):
                 if not selected_event_str or "행사 없음" in selected_event_str:
                     st.error("행사를 선택해 주세요.")
                 elif not is_valid_student or not search_name.strip():
@@ -485,11 +527,11 @@ elif st.session_state.user_role == 'staff':
                         "operator": st.session_state.staff_info
                     })
                     db_add_log("참여자 등록", f"[{event_clean}] {search_std_id} {search_name} 등록 완료", st.session_state.staff_info)
-                    st.success(f"{search_name.strip()}님 출석 등록 완료!")
+                    st.success(f"✨ {search_name.strip()}님 출석 등록 완료!")
                     st.rerun()
             
             st.markdown("<hr style='border-color:#E2E8F0; margin: 30px 0;'>", unsafe_allow_html=True)
-            st.markdown("<h4>금일 참여자 출석 현황 관리</h4>", unsafe_allow_html=True)
+            st.markdown("### 📋 금일 참여자 출석 현황 및 관리")
             today_str = datetime.now().strftime("%Y-%m-%d")
             if not df_all_p.empty:
                 df_today = df_all_p[df_all_p['timestamp'].str.startswith(today_str)]
@@ -498,12 +540,10 @@ elif st.session_state.user_role == 'staff':
                         c_info, c_del, c_edit = st.columns([3, 1, 1])
                         c_info.write(f"[{row['timestamp']}] **{row['event_name']}** - {row['student_id']} {row['name']}")
                         
-                        st.markdown('<div class="sub-btn">', unsafe_allow_html=True)
                         if c_del.button("삭제", key=f"del_{row['id']}"):
                             db_delete_participant(row['id'])
                             db_add_log("데이터 삭제", f"참여자 ID {row['id']} 삭제됨", st.session_state.staff_info)
                             st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
                         
                         with c_edit.expander("수정"):
                             mod_name = st.text_input("이름", value=row['name'], key=f"m_name_{row['id']}")
@@ -518,21 +558,27 @@ elif st.session_state.user_role == 'staff':
                 else:
                     st.info("오늘 등록된 출석 기록이 없습니다.")
 
+    # --------------------------------------
     # 탭 2: 행사 개설 및 마감 관리
+    # --------------------------------------
     with tab_nav2:
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-        st.markdown("<h4>신규 행사 개설</h4>", unsafe_allow_html=True)
-        e_col1, e_col2 = st.columns([1, 1.8], gap="large")
-        with e_col1:
-            new_e_name = st.text_input("새 행사명 입력")
-            if st.button("행사 개설"):
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_e1, col_e2 = st.columns([1, 1.8], gap="large")
+        with col_e1:
+            st.markdown("### 🏷️ 신규 행사 개설")
+            new_e_name = st.text_input("새 행사명 입력", placeholder="예: 2026 겨울 독서 캠프")
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("행사 개설하기"):
                 if new_e_name.strip():
                     db_add_event(new_e_name.strip(), "진행 중", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                     db_add_log("행사 생성", f"신규 행사 [{new_e_name.strip()}] 생성", st.session_state.staff_info)
                     st.success(f"[{new_e_name.strip()}] 행사가 개설되었습니다.")
                     st.rerun()
-        with e_col2:
-            st.markdown("<h5>개설된 행사 목록 및 관리</h5>", unsafe_allow_html=True)
+                else:
+                    st.error("행사명을 입력해 주세요.")
+                    
+        with col_e2:
+            st.markdown("### 📋 개설된 행사 목록 및 관리")
             df_evs = db_get_events()
             if not df_evs.empty:
                 for _, ev in df_evs.iterrows():
@@ -559,44 +605,51 @@ elif st.session_state.user_role == 'staff':
             else:
                 st.info("개설된 행사가 없습니다.")
 
+    # --------------------------------------
     # 탭 3: 통계 대시보드
+    # --------------------------------------
     with tab_nav3:
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-        st.markdown("<h4>통합 통계 대시보드 및 시각화</h4>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("### 📊 통합 통계 대시보드 및 시각화")
         df_all = db_get_participants()
         if df_all.empty:
             st.info("통계를 산출할 참여 데이터가 없습니다.")
         else:
             st.bar_chart(df_all['event_name'].value_counts())
-            t1, t2 = st.tabs(["행사별 통계", "학년별 통계"])
+            st.markdown("<br>", unsafe_allow_html=True)
+            t1, t2 = st.tabs(["행사별 통계 테이블", "학년별 통계 테이블"])
             with t1:
                 st.dataframe(df_all['event_name'].value_counts().reset_index(), use_container_width=True, hide_index=True)
             with t2:
                 st.dataframe(df_all['grade'].value_counts().reset_index(), use_container_width=True, hide_index=True)
 
-    # 탭 4: 처리 이력
+    # --------------------------------------
+    # 탭 4: 처리 이력 (Audit Log)
+    # --------------------------------------
     with tab_nav4:
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-        st.markdown("<h4>시스템 감사 로그 (Audit Log)</h4>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("### 📜 시스템 감사 로그 (Audit Log)")
         df_l = db_get_logs()
         if not df_l.empty:
             st.dataframe(df_l, use_container_width=True, hide_index=True)
             
-            st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-            with st.expander("처리 이력(로그) 전체 비우기"):
-                st.warning("⚠️ 모든 시스템 감사 로그가 영구적으로 삭제됩니다.")
+            st.markdown("<br>", unsafe_allow_html=True)
+            with st.expander("⚠️ 처리 이력(로그) 전체 비우기"):
+                st.warning("모든 시스템 감사 로그가 데이터베이스에서 영구적으로 삭제됩니다.")
                 if st.button("모든 처리 이력 삭제 실행"):
                     db_clear_logs()
-                    st.success("모든 처리 이력이 삭제되었습니다.")
+                    st.success("모든 처리 이력이 비워졌습니다.")
                     st.rerun()
         else:
             st.info("기록된 처리 이력이 없습니다.")
 
+    # --------------------------------------
     # 탭 5: 백업 및 복원
+    # --------------------------------------
     with tab_nav5:
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
-        st.markdown("<h4>데이터 백업 및 복원</h4>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size: 14px; color: #4B5563;'>현재 데이터베이스를 안전하게 백업하거나 복원할 수 있습니다.</p>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("### 💾 데이터베이스 백업 및 복원")
+        st.markdown("현재 영구 저장된 모든 SQLite 데이터베이스 파일(`library_system.db`)을 백업하거나 복원합니다.")
         
         with open("library_system.db", "rb") as f:
             db_bytes = f.read()
