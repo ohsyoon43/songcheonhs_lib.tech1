@@ -5,6 +5,8 @@ from zoneinfo import ZoneInfo
 from io import BytesIO
 import sqlite3
 from pathlib import Path
+import tempfile
+import os
 
 # ------------------------------------------------------------
 # Page configuration
@@ -35,6 +37,17 @@ def init_db():
         cur.execute('''CREATE TABLE IF NOT EXISTS logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL,
             category TEXT NOT NULL, detail TEXT NOT NULL, operator TEXT NOT NULL)''')
+        cur.execute('''CREATE TABLE IF NOT EXISTS deleted_participants (
+            archive_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            original_id INTEGER NOT NULL, event_name TEXT NOT NULL,
+            student_id TEXT NOT NULL, grade INTEGER NOT NULL, class INTEGER NOT NULL,
+            number INTEGER NOT NULL, name TEXT NOT NULL, timestamp TEXT NOT NULL,
+            operator TEXT NOT NULL, deleted_at TEXT NOT NULL, deleted_by TEXT NOT NULL)''')
+        cur.execute('''CREATE TABLE IF NOT EXISTS deleted_logs (
+            archive_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            original_id INTEGER NOT NULL, timestamp TEXT NOT NULL,
+            category TEXT NOT NULL, detail TEXT NOT NULL, operator TEXT NOT NULL,
+            deleted_at TEXT NOT NULL, deleted_by TEXT NOT NULL)''')
         # 기존 DB를 유지하면서 행사 종류와 설명 컬럼만 필요한 경우 추가
         event_cols = {row[1] for row in cur.execute("PRAGMA table_info(events)").fetchall()}
         if 'event_type' not in event_cols:
@@ -58,10 +71,15 @@ def db_update_event_status(event_id, new_status):
     with get_db_connection() as conn:
         conn.execute("UPDATE events SET status=? WHERE id=?", (new_status,event_id))
 
-def db_delete_event_and_records(event_id, event_name):
+def db_delete_event_and_records(event_id, event_name, deleted_by="관리자"):
+    # 행사 삭제 시 연결된 참여 기록도 복구 보관함에 먼저 보관한다.
+    with get_db_connection() as conn:
+        participant_ids = [row[0] for row in conn.execute(
+            "SELECT id FROM participants WHERE event_name=?", (event_name,)
+        ).fetchall()]
+    db_archive_and_delete_participants(participant_ids, deleted_by)
     with get_db_connection() as conn:
         conn.execute("DELETE FROM events WHERE id=?", (event_id,))
-        conn.execute("DELETE FROM participants WHERE event_name=?", (event_name,))
 
 def db_add_participant(data):
     with get_db_connection() as conn:
@@ -80,9 +98,38 @@ def db_participant_exists(event_name, student_id, exclude_id=None):
     with get_db_connection() as conn:
         return conn.execute(query, params).fetchone() is not None
 
-def db_delete_participant(part_id):
+def db_archive_and_delete_participants(part_ids, deleted_by):
+    """Move selected participation rows to a recovery table before deleting them."""
+    ids = sorted({int(x) for x in part_ids})
+    if not ids:
+        return 0
+    placeholders = ",".join("?" for _ in ids)
+    deleted_at = now_seoul().strftime("%Y-%m-%d %H:%M:%S")
     with get_db_connection() as conn:
-        conn.execute("DELETE FROM participants WHERE id=?", (part_id,))
+        rows = conn.execute(
+            f"SELECT id,event_name,student_id,grade,class,number,name,timestamp,operator FROM participants WHERE id IN ({placeholders})",
+            ids,
+        ).fetchall()
+        conn.executemany("""INSERT INTO deleted_participants
+            (original_id,event_name,student_id,grade,class,number,name,timestamp,operator,deleted_at,deleted_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            [(r[0], *r[1:], deleted_at, deleted_by) for r in rows])
+        conn.executemany("DELETE FROM participants WHERE id=?", [(r[0],) for r in rows])
+    return len(rows)
+
+def db_restore_archived_participant(archive_id, restored_by):
+    with get_db_connection() as conn:
+        row = conn.execute("SELECT * FROM deleted_participants WHERE archive_id=?", (int(archive_id),)).fetchone()
+        if row is None:
+            return False, "복구할 기록을 찾을 수 없습니다."
+        # row: archive_id, original_id, event_name, student_id, grade, class, number, name, timestamp, operator, deleted_at, deleted_by
+        if conn.execute("SELECT 1 FROM participants WHERE event_name=? AND student_id=? LIMIT 1", (row[2], row[3])).fetchone():
+            return False, "같은 행사에 해당 학번의 기록이 이미 있습니다. 중복 복구를 막았습니다."
+        conn.execute("""INSERT INTO participants (event_name,student_id,grade,class,number,name,timestamp,operator)
+            VALUES (?,?,?,?,?,?,?,?)""", (row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9]))
+        conn.execute("DELETE FROM deleted_participants WHERE archive_id=?", (int(archive_id),))
+    db_add_log("참여 기록 복구", f"보관 기록 #{archive_id} 복구 완료", restored_by)
+    return True, "기록을 복구했습니다."
 
 def db_update_participant(part_id, event_name, student_id, grade, class_num, number, name):
     with get_db_connection() as conn:
@@ -97,6 +144,34 @@ def db_add_log(category, detail, operator):
 def db_clear_logs():
     with get_db_connection() as conn:
         conn.execute("DELETE FROM logs")
+
+def db_archive_and_delete_logs(log_ids, deleted_by):
+    """Archive selected log rows before removing them from the active log list."""
+    ids = sorted({int(x) for x in log_ids})
+    if not ids:
+        return 0
+    placeholders = ",".join("?" for _ in ids)
+    deleted_at = now_seoul().strftime("%Y-%m-%d %H:%M:%S")
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            f"SELECT id,timestamp,category,detail,operator FROM logs WHERE id IN ({placeholders})", ids
+        ).fetchall()
+        conn.executemany("""INSERT INTO deleted_logs
+            (original_id,timestamp,category,detail,operator,deleted_at,deleted_by)
+            VALUES (?,?,?,?,?,?,?)""",
+            [(r[0], r[1], r[2], r[3], r[4], deleted_at, deleted_by) for r in rows])
+        conn.executemany("DELETE FROM logs WHERE id=?", [(r[0],) for r in rows])
+    return len(rows)
+
+def db_restore_archived_log(archive_id, restored_by):
+    with get_db_connection() as conn:
+        row = conn.execute("SELECT * FROM deleted_logs WHERE archive_id=?", (int(archive_id),)).fetchone()
+        if row is None:
+            return False, "복구할 처리 이력을 찾을 수 없습니다."
+        conn.execute("INSERT INTO logs (timestamp,category,detail,operator) VALUES (?,?,?,?)", (row[2], row[3], row[4], row[5]))
+        conn.execute("DELETE FROM deleted_logs WHERE archive_id=?", (int(archive_id),))
+    db_add_log("처리 이력 복구", f"보관 이력 #{archive_id} 복구 완료", restored_by)
+    return True, "처리 이력을 복구했습니다."
 
 init_db()
 
@@ -156,7 +231,8 @@ h1,h2,h3,h4 { color:#20232b; letter-spacing:-.65px; }
   .st-key-mobile_keypad [data-testid="stButton"] > button span { color:#20232b !important; font-size:22px; font-weight:750; }
   .st-key-mobile_keypad [data-testid="stButton"] > button:hover { background:#eaf2ff; border-color:#3182F6; }
 }
-@media (max-width: 760px) { .block-container { padding-left:1rem; padding-right:1rem; padding-top:1rem; } .brandbar { padding:15px 17px; border-radius:20px; align-items:flex-start; flex-direction:column; } .hero-card { padding:28px 19px; } .glass-card { padding:19px; } .section-title { font-size:24px; } [data-testid="stTabs"] [data-baseweb="tab-list"] { flex-wrap:wrap; } }
+@media (max-width: 760px) { .block-container { padding-left:1rem; padding-right:1rem; padding-top:1rem; } .brandbar { padding:15px 17px; border-radius:20px; align-items:flex-start; flex-direction:column; } .hero-card { padding:28px 19px; } .glass-card { padding:19px; } .section-title { font-size:24px; } [data-testid="stTabs"] [data-baseweb="tab-list"] { flex-wrap:wrap; } [data-testid="stDataFrame"] { max-width:100%; } .stMetric { padding:13px; } }
+@media (hover: none) and (pointer: coarse) { .stButton > button, .stDownloadButton > button { min-height:52px; } [data-testid="stTextInput"] input { min-height:58px !important; font-size:18px !important; } }
 </style>''', unsafe_allow_html=True)
 
 st.markdown('''<div class="brandbar"><div class="brandname">Songcheon <span style="color:#3182F6">Lib Tech</span></div><div class="branddesc">인천송천고등학교 · 행사 관리 시스템</div></div>''', unsafe_allow_html=True)
@@ -259,7 +335,6 @@ elif st.session_state.user_role == 'staff_login':
         with c2:
             if st.button("메인으로", key="login_home"):
                 st.session_state.user_role = None; st.rerun()
-        st.caption("안내: 현재는 담당자 정보만 입력해 접속합니다. 비밀번호 확인 기능은 아직 없습니다.")
 
 # ------------------------------------------------------------
 # Participant registration
@@ -408,15 +483,14 @@ elif st.session_state.user_role == 'staff':
                 st.dataframe(record_view[["id", "event_name", "student_id", "name", "timestamp", "operator"]], use_container_width=True, hide_index=True)
                 record_labels = {f"#{int(row['id'])} · {row['event_name']} · {row['student_id']} {row['name']} · {row['timestamp']}": int(row['id']) for _, row in record_view.iterrows()}
                 selected_record_labels = st.multiselect("삭제할 기록 선택", list(record_labels.keys()), key="bulk_delete_records", placeholder="삭제할 기록을 선택하세요")
-                confirm_bulk_delete = st.checkbox("선택한 기록을 영구 삭제하는 것에 동의합니다.", key="confirm_bulk_delete_records", disabled=not selected_record_labels)
+                confirm_bulk_delete = st.checkbox("선택한 기록을 삭제하고 복구 보관함으로 이동하는 것에 동의합니다.", key="confirm_bulk_delete_records", disabled=not selected_record_labels)
                 if st.button("선택한 참여 기록 삭제", type="primary", disabled=(not selected_record_labels or not confirm_bulk_delete), key="bulk_delete_records_btn"):
                     ids_to_delete = [record_labels[label] for label in selected_record_labels]
-                    with get_db_connection() as conn:
-                        conn.executemany("DELETE FROM participants WHERE id=?", [(rid,) for rid in ids_to_delete])
-                    db_add_log("데이터 삭제", f"관리자가 참여 기록 {len(ids_to_delete)}건을 삭제함", st.session_state.staff_info)
+                    deleted_count = db_archive_and_delete_participants(ids_to_delete, st.session_state.staff_info)
+                    db_add_log("데이터 삭제", f"관리자가 참여 기록 {deleted_count}건을 삭제하고 복구 보관함에 보관함", st.session_state.staff_info)
                     st.session_state.pop("bulk_delete_records", None)
                     st.session_state.pop("confirm_bulk_delete_records", None)
-                    st.success(f"참여 기록 {len(ids_to_delete)}건을 삭제했습니다.")
+                    st.success(f"참여 기록 {deleted_count}건을 복구 보관함으로 이동했습니다.")
                     st.rerun()
                 with st.expander("선택한 기록 수정"):
                     edit_label = st.selectbox("수정할 기록", list(record_labels.keys()), key="edit_record_choice")
@@ -433,6 +507,21 @@ elif st.session_state.user_role == 'staff':
                             st.rerun()
                         else:
                             st.error("올바른 5자리 학번과 이름을 입력해 주세요.")
+
+        with st.expander("삭제한 참여 기록 복구"):
+            with get_db_connection() as conn:
+                archived_rows = conn.execute("SELECT archive_id,original_id,event_name,student_id,name,timestamp,deleted_at,deleted_by FROM deleted_participants ORDER BY archive_id DESC").fetchall()
+            if not archived_rows:
+                st.caption("복구할 기록이 없습니다.")
+            else:
+                archive_df = pd.DataFrame(archived_rows, columns=["보관 ID","원래 기록 ID","행사","학번","이름","참여 시각","삭제 시각","삭제 담당자"])
+                st.dataframe(archive_df, use_container_width=True, hide_index=True)
+                archive_choices = {f"#{r[0]} · {r[2]} · {r[3]} {r[4]} · 삭제 {r[6]}": int(r[0]) for r in archived_rows}
+                chosen_archive = st.selectbox("복구할 기록", list(archive_choices.keys()), key="restore_archive_choice")
+                if st.button("선택한 기록 복구", key="restore_archive_btn"):
+                    ok, message = db_restore_archived_participant(archive_choices[chosen_archive], st.session_state.staff_info)
+                    (st.success if ok else st.warning)(message)
+                    st.rerun()
 
     with tab2:
         st.markdown('<div class="eyebrow">EVENT MANAGEMENT</div><h3>신규 행사 개설</h3>', unsafe_allow_html=True)
@@ -468,7 +557,7 @@ elif st.session_state.user_role == 'staff':
                             st.warning("행사와 연결된 모든 참여 기록이 삭제됩니다.")
                             yes, no = st.columns(2)
                             if yes.button("삭제 확인", key=f"confirm_yes_{ev['id']}"):
-                                db_delete_event_and_records(int(ev['id']), ev['name']); db_add_log("행사 삭제", f"행사 [{ev['name']}] 영구 삭제 완료", st.session_state.staff_info); st.session_state.pop(f"confirm_event_delete_{ev['id']}", None); st.rerun()
+                                db_delete_event_and_records(int(ev['id']), ev['name'], st.session_state.staff_info); db_add_log("행사 삭제", f"행사 [{ev['name']}] 영구 삭제 완료", st.session_state.staff_info); st.session_state.pop(f"confirm_event_delete_{ev['id']}", None); st.rerun()
                             if no.button("취소", key=f"confirm_no_{ev['id']}"):
                                 st.session_state.pop(f"confirm_event_delete_{ev['id']}", None); st.rerun()
 
@@ -528,8 +617,10 @@ elif st.session_state.user_role == 'staff':
                     monthly = filtered.copy()
                     monthly["월"] = monthly["timestamp"].astype(str).str[:7]
                     monthly_counts = monthly.groupby("월").size().reset_index(name="참여 건수").sort_values("월")
-                    class_counts = (filtered.assign(학급=filtered["grade"].astype(str) + "학년 " + filtered["class"].astype(str) + "반")
-                                    .groupby("학급").size().sort_values(ascending=False).rename("참여 건수").reset_index())
+                    class_counts = (filtered.assign(학급=pd.to_numeric(filtered["grade"], errors="coerce").fillna(0).astype(int).astype(str) + "학년 " + pd.to_numeric(filtered["class"], errors="coerce").fillna(0).astype(int).astype(str) + "반")
+                                    .groupby("학급").agg(참여_건수=("student_id", "size"), 참여_학생_수=("student_id", "nunique"))
+                                    .sort_values(["참여_건수", "참여_학생_수"], ascending=False).reset_index()
+                                    .rename(columns={"참여_건수": "참여 건수", "참여_학생_수": "참여 학생 수"}))
                     st.markdown("#### 행사별 참여 현황")
                     st.bar_chart(event_counts.set_index("행사명"), use_container_width=True)
                     c1, c2 = st.columns(2)
@@ -543,8 +634,8 @@ elif st.session_state.user_role == 'staff':
                     if not class_counts.empty:
                         top_count = int(class_counts["참여 건수"].max())
                         top_classes = class_counts[class_counts["참여 건수"] == top_count]["학급"].astype(str).tolist()
-                        st.success(f"가장 많이 참여한 학급: {', '.join(top_classes)} · {top_count:,}건")
-                        st.bar_chart(class_counts.set_index("학급"), use_container_width=True)
+                        st.success(f"참여 건수 최다 학급: {', '.join(top_classes)} · {top_count:,}건")
+                        st.bar_chart(class_counts.set_index("학급")[["참여 건수", "참여 학생 수"]], use_container_width=True)
                         st.dataframe(class_counts, use_container_width=True, hide_index=True)
                     st.markdown("#### 필터 적용 기록")
                     st.dataframe(filtered, use_container_width=True, hide_index=True)
@@ -592,10 +683,9 @@ elif st.session_state.user_role == 'staff':
                     st.warning("선택한 처리 이력만 삭제됩니다. 삭제 후에는 복구할 수 없습니다.")
                     if st.button("선택한 기록 삭제", type="primary", disabled=not selected_log_labels):
                         ids = [options[label] for label in selected_log_labels]
-                        with get_db_connection() as conn:
-                            conn.executemany("DELETE FROM logs WHERE id = ?", [(log_id,) for log_id in ids])
-                        db_add_log("처리 이력 삭제", f"관리자가 처리 이력 {len(ids)}건을 삭제함", st.session_state.staff_info)
-                        st.success(f"처리 이력 {len(ids)}건을 삭제했습니다.")
+                        deleted_count = db_archive_and_delete_logs(ids, st.session_state.staff_info)
+                        db_add_log("처리 이력 삭제", f"관리자가 처리 이력 {deleted_count}건을 삭제하고 복구 보관함에 보관함", st.session_state.staff_info)
+                        st.success(f"처리 이력 {deleted_count}건을 복구 보관함으로 이동했습니다.")
                         st.rerun()
                 else:
                     st.caption("삭제할 기록이 없습니다.")
@@ -603,13 +693,81 @@ elif st.session_state.user_role == 'staff':
                 st.warning("모든 처리 이력이 삭제됩니다. 이 작업은 되돌릴 수 없습니다.")
                 confirm = st.checkbox("전체 삭제를 확인했습니다.", key="confirm_clear_logs")
                 if st.button("모든 처리 이력 삭제", disabled=not confirm):
-                    db_clear_logs(); st.success("처리 이력을 삭제했습니다."); st.rerun()
+                    all_log_ids = db_get_logs()["id"].astype(int).tolist()
+                    deleted_count = db_archive_and_delete_logs(all_log_ids, st.session_state.staff_info)
+                    db_add_log("처리 이력 삭제", f"관리자가 전체 처리 이력 {deleted_count}건을 복구 보관함으로 이동함", st.session_state.staff_info)
+                    st.success(f"처리 이력 {deleted_count}건을 복구 보관함으로 이동했습니다.")
+                    st.rerun()
+            with st.expander("삭제한 처리 이력 복구"):
+                with get_db_connection() as conn:
+                    archived_logs = conn.execute("SELECT archive_id,original_id,timestamp,category,detail,operator,deleted_at,deleted_by FROM deleted_logs ORDER BY archive_id DESC").fetchall()
+                if not archived_logs:
+                    st.caption("복구할 처리 이력이 없습니다.")
+                else:
+                    archived_log_df = pd.DataFrame(archived_logs, columns=["보관 ID", "원래 기록 ID", "처리 시각", "분류", "내용", "담당자", "삭제 시각", "삭제 담당자"])
+                    st.dataframe(archived_log_df, use_container_width=True, hide_index=True)
+                    archived_log_choices = {f"#{r[0]} · {r[3]} · {str(r[4])[:50]} · 삭제 {r[6]}": int(r[0]) for r in archived_logs}
+                    chosen_log_archive = st.selectbox("복구할 처리 이력", list(archived_log_choices.keys()), key="restore_log_archive_choice")
+                    if st.button("선택한 처리 이력 복구", key="restore_log_archive_btn"):
+                        ok, message = db_restore_archived_log(archived_log_choices[chosen_log_archive], st.session_state.staff_info)
+                        (st.success if ok else st.warning)(message)
+                        st.rerun()
 
     with tab5:
-        st.markdown('<div class="eyebrow">DATA MANAGEMENT</div><h3>데이터 백업 및 복원</h3><p class="muted">현재 SQLite 데이터베이스 파일을 내려받아 백업할 수 있습니다.</p>', unsafe_allow_html=True)
+        st.markdown('<div class="eyebrow">DATA MANAGEMENT</div><h3>데이터 백업 및 복원</h3><p class="muted">복원 전에 현재 데이터베이스를 백업하고, 업로드한 파일의 구조를 확인합니다.</p>', unsafe_allow_html=True)
         if DB_PATH.exists():
-            st.download_button("데이터베이스 백업 (.db 다운로드)", data=DB_PATH.read_bytes(), file_name=f"library_backup_{now_seoul().strftime('%Y%m%d_%H%M%S')}.db", mime="application/octet-stream")
-        else: st.error("데이터베이스 파일을 찾을 수 없습니다.")
-        st.info("복원은 백업 파일을 안전한 위치에 보관한 뒤, 앱을 중지하고 기존 library_system.db를 교체하는 방식으로 진행하세요. 운영 중인 DB를 덮어쓰면 데이터가 손실될 수 있습니다.")
+            # SQLite backup API로 WAL 상태를 포함한 일관된 백업 스냅샷 생성
+            backup_buffer = BytesIO()
+            with sqlite3.connect(str(DB_PATH)) as source_conn:
+                with sqlite3.connect(":memory:") as backup_conn:
+                    source_conn.backup(backup_conn)
+                    backup_conn.commit()
+                    temp_path = None
+                    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+                        temp_path = tmp.name
+                    try:
+                        with sqlite3.connect(temp_path) as tmp_conn:
+                            backup_conn.backup(tmp_conn)
+                        backup_buffer.write(Path(temp_path).read_bytes())
+                    finally:
+                        try: os.unlink(temp_path)
+                        except OSError: pass
+            st.download_button("현재 데이터베이스 백업 (.db)", data=backup_buffer.getvalue(), file_name=f"library_backup_{now_seoul().strftime('%Y%m%d_%H%M%S')}.db", mime="application/octet-stream")
+        else:
+            st.error("데이터베이스 파일을 찾을 수 없습니다.")
+        st.warning("복원은 현재 데이터베이스를 업로드한 백업으로 교체합니다. 복원 전에 현재 백업을 반드시 다운로드하세요.")
+        uploaded_backup = st.file_uploader("복원할 SQLite 백업 파일 선택", type=["db", "sqlite", "sqlite3"], key="restore_db_upload")
+        restore_confirm = st.checkbox("현재 데이터를 업로드한 백업 내용으로 교체하는 것에 동의합니다.", key="restore_db_confirm", disabled=uploaded_backup is None)
+        if st.button("백업 파일 검증 후 복원", key="restore_db_btn", disabled=(uploaded_backup is None or not restore_confirm)):
+            temp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+                    tmp.write(uploaded_backup.getvalue())
+                    temp_path = tmp.name
+                with sqlite3.connect(temp_path) as check_conn:
+                    table_names = {r[0] for r in check_conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+                    required = {"events", "participants", "logs"}
+                    if not required.issubset(table_names):
+                        raise ValueError("백업 파일에 필수 테이블(events, participants, logs)이 없습니다.")
+                    integrity = check_conn.execute("PRAGMA integrity_check").fetchone()[0]
+                    if integrity != "ok":
+                        raise ValueError("SQLite 무결성 검사에 실패했습니다.")
+                # 안전망: 현재 DB의 별도 스냅샷을 생성한 뒤에만 교체
+                pre_restore_path = DB_PATH.with_name(f"{DB_PATH.stem}_before_restore_{now_seoul().strftime('%Y%m%d_%H%M%S')}{DB_PATH.suffix}")
+                with sqlite3.connect(str(DB_PATH)) as current_conn, sqlite3.connect(str(pre_restore_path)) as save_conn:
+                    current_conn.backup(save_conn)
+                os.replace(temp_path, DB_PATH)
+                temp_path = None
+                init_db()
+                db_add_log("데이터 복원", f"백업 파일 복원 완료. 이전 DB 안전 사본: {pre_restore_path.name}", st.session_state.staff_info)
+                st.success("복원이 완료되었습니다. 기존 데이터의 안전 사본도 서버에 남겼습니다.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"복원하지 못했습니다: {exc}")
+            finally:
+                if temp_path:
+                    try: os.unlink(temp_path)
+                    except OSError: pass
+        st.info("중요: Streamlit Cloud의 로컬 파일은 영구 저장소가 아닐 수 있습니다. 장기 보존이 필요하면 외부 데이터베이스나 영구 스토리지를 사용하고 정기적으로 백업 파일을 내려받으세요.")
 
 st.markdown('<div style="text-align:center;color:#a0a8b8;font-size:12px;padding:24px 0 4px;letter-spacing:1px">SONGCHEON EVENT SYSTEM · GLASS UI</div>', unsafe_allow_html=True)
