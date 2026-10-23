@@ -136,6 +136,16 @@ h1,h2,h3,h4 { color:#20232b; letter-spacing:-.65px; }
 [data-testid="stTextInput"] input { min-height:54px !important; font-size:17px !important; }
 [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:54px !important; font-size:16px !important; }
 .stMetric { background:rgba(255,255,255,.78); border:1px solid rgba(255,255,255,.95); border-radius:20px; padding:18px 20px; box-shadow:0 10px 26px rgba(51,65,97,.06); }
+/* Touch keypad is shown only on tablet/mobile; hidden on desktop */
+.st-key-mobile_keypad { display:none; }
+@media (max-width: 760px) {
+  .st-key-mobile_keypad { display:block; margin:14px 0 20px; }
+  .st-key-mobile_keypad [data-testid="stButton"] > button { min-height:58px; font-size:23px; border-radius:16px; background:rgba(255,255,255,.94); color:#20232b; border:1px solid #dce5f5; box-shadow:0 4px 12px rgba(36,75,140,.08); }
+  .st-key-mobile_keypad [data-testid="stButton"] > button p,
+  .st-key-mobile_keypad [data-testid="stButton"] > button span { color:#20232b !important; font-size:22px; font-weight:750; }
+  .st-key-mobile_keypad [data-testid="stButton"] > button:hover { background:#eaf2ff; border-color:#3182F6; }
+}
+@media (min-width: 761px) { .st-key-mobile_keypad { display:none !important; } }
 @media (max-width: 760px) { .block-container { padding-left:1rem; padding-right:1rem; padding-top:1rem; } .brandbar { padding:15px 17px; border-radius:20px; align-items:flex-start; flex-direction:column; } .hero-card { padding:28px 19px; } .glass-card { padding:19px; } .section-title { font-size:24px; } [data-testid="stTabs"] [data-baseweb="tab-list"] { flex-wrap:wrap; } }
 </style>''', unsafe_allow_html=True)
 
@@ -166,6 +176,23 @@ def fill_participant_name():
     matched_name = find_student_name(sid) if len(sid) == 5 and sid.isdigit() else ""
     if matched_name:
         st.session_state["participant_name"] = matched_name
+
+def keypad_add_digit(digit):
+    current = str(st.session_state.get("participant_sid", ""))
+    if len(current) < 5 and str(digit).isdigit():
+        st.session_state["participant_sid"] = current + str(digit)
+        if len(st.session_state["participant_sid"]) == 5:
+            fill_participant_name()
+
+def keypad_backspace():
+    current = str(st.session_state.get("participant_sid", ""))
+    st.session_state["participant_sid"] = current[:-1]
+    # 이름 자동 입력은 학번이 달라졌을 수 있으므로 지워 사용자가 확인하도록 함
+    st.session_state["participant_name"] = ""
+
+def keypad_clear():
+    st.session_state["participant_sid"] = ""
+    st.session_state["participant_name"] = ""
 
 def fill_staff_student_name():
     sid = st.session_state.get("staff_search_id", "").strip()
@@ -239,6 +266,24 @@ elif st.session_state.user_role == 'participant':
         selected = st.selectbox("참여할 행사", event_options(df_events), key="participant_event")
         sid = st.text_input("학번 (5자리)", placeholder="예: 10101", max_chars=5, key="participant_sid", on_change=fill_participant_name, help="학번을 입력하면 기존 등록 정보가 있을 때 이름이 자동으로 채워집니다.")
         pname = st.text_input("이름", placeholder="학번과 이름을 확인해 주세요", key="participant_name")
+        st.markdown('<p class="muted" style="margin:4px 0 8px">모바일·태블릿에서는 아래 숫자판으로 학번을 입력할 수 있어요.</p>', unsafe_allow_html=True)
+        with st.container(key="mobile_keypad"):
+            keypad_rows = [
+                [("1", "1"), ("2", "2"), ("3", "3")],
+                [("4", "4"), ("5", "5"), ("6", "6")],
+                [("7", "7"), ("8", "8"), ("9", "9")],
+                [("지우기", "clear"), ("0", "0"), ("⌫", "backspace")],
+            ]
+            for row_index, keypad_row in enumerate(keypad_rows):
+                key_cols = st.columns(3, gap="small")
+                for col_index, (label, value) in enumerate(keypad_row):
+                    with key_cols[col_index]:
+                        if value == "clear":
+                            st.button(label, key=f"participant_key_clear_{row_index}_{col_index}", on_click=keypad_clear, use_container_width=True)
+                        elif value == "backspace":
+                            st.button(label, key=f"participant_key_back_{row_index}_{col_index}", on_click=keypad_backspace, use_container_width=True)
+                        else:
+                            st.button(label, key=f"participant_key_{value}", on_click=keypad_add_digit, args=(value,), use_container_width=True)
         if st.button("참여 등록하기"):
             valid, grade, class_num, number = parse_student_id(sid)
             if "행사 없음" in selected: st.error("등록 가능한 행사가 없습니다.")
