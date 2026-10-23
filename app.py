@@ -69,6 +69,17 @@ def db_add_participant(data):
             (event_name,student_id,grade,class,number,name,timestamp,operator)
             VALUES (?,?,?,?,?,?,?,?)''', (data['event_name'],data['student_id'],data['grade'],data['class'],data['number'],data['name'],data['timestamp'],data['operator']))
 
+def db_participant_exists(event_name, student_id, exclude_id=None):
+    """행사별 동일 학번의 중복 참여 등록 여부를 확인한다."""
+    query = "SELECT 1 FROM participants WHERE event_name=? AND student_id=?"
+    params = [str(event_name).strip(), str(student_id).strip()]
+    if exclude_id is not None:
+        query += " AND id<>?"
+        params.append(int(exclude_id))
+    query += " LIMIT 1"
+    with get_db_connection() as conn:
+        return conn.execute(query, params).fetchone() is not None
+
 def db_delete_participant(part_id):
     with get_db_connection() as conn:
         conn.execute("DELETE FROM participants WHERE id=?", (part_id,))
@@ -136,16 +147,15 @@ h1,h2,h3,h4 { color:#20232b; letter-spacing:-.65px; }
 [data-testid="stTextInput"] input { min-height:54px !important; font-size:17px !important; }
 [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:54px !important; font-size:16px !important; }
 .stMetric { background:rgba(255,255,255,.78); border:1px solid rgba(255,255,255,.95); border-radius:20px; padding:18px 20px; box-shadow:0 10px 26px rgba(51,65,97,.06); }
-/* Touch keypad is shown only on tablet/mobile; hidden on desktop */
-.st-key-mobile_keypad { display:none; }
-@media (max-width: 760px) {
-  .st-key-mobile_keypad { display:block; margin:14px 0 20px; }
-  .st-key-mobile_keypad [data-testid="stButton"] > button { min-height:58px; font-size:23px; border-radius:16px; background:rgba(255,255,255,.94); color:#20232b; border:1px solid #dce5f5; box-shadow:0 4px 12px rgba(36,75,140,.08); }
+/* 터치 입력이 주 입력 방식인 휴대폰·태블릿에서만 숫자판 표시 */
+.st-key-mobile_keypad { display:none !important; }
+@media (hover: none) and (pointer: coarse) {
+  .st-key-mobile_keypad { display:block !important; margin:14px 0 20px; }
+  .st-key-mobile_keypad [data-testid="stButton"] > button { min-height:58px; font-size:23px; border-radius:16px; background:rgba(255,255,255,.96); color:#20232b; border:1px solid #dce5f5; box-shadow:0 4px 12px rgba(36,75,140,.08); }
   .st-key-mobile_keypad [data-testid="stButton"] > button p,
   .st-key-mobile_keypad [data-testid="stButton"] > button span { color:#20232b !important; font-size:22px; font-weight:750; }
   .st-key-mobile_keypad [data-testid="stButton"] > button:hover { background:#eaf2ff; border-color:#3182F6; }
 }
-@media (min-width: 761px) { .st-key-mobile_keypad { display:none !important; } }
 @media (max-width: 760px) { .block-container { padding-left:1rem; padding-right:1rem; padding-top:1rem; } .brandbar { padding:15px 17px; border-radius:20px; align-items:flex-start; flex-direction:column; } .hero-card { padding:28px 19px; } .glass-card { padding:19px; } .section-title { font-size:24px; } [data-testid="stTabs"] [data-baseweb="tab-list"] { flex-wrap:wrap; } }
 </style>''', unsafe_allow_html=True)
 
@@ -174,13 +184,14 @@ def find_student_name(student_id):
 def fill_participant_name():
     sid = st.session_state.get("participant_sid", "").strip()
     matched_name = find_student_name(sid) if len(sid) == 5 and sid.isdigit() else ""
-    if matched_name:
-        st.session_state["participant_name"] = matched_name
+    # 학번이 바뀌었는데 이전 학생 이름이 남아 잘못 등록되는 것을 방지
+    st.session_state["participant_name"] = matched_name
 
 def keypad_add_digit(digit):
     current = str(st.session_state.get("participant_sid", ""))
     if len(current) < 5 and str(digit).isdigit():
         st.session_state["participant_sid"] = current + str(digit)
+        st.session_state["participant_name"] = ""
         if len(st.session_state["participant_sid"]) == 5:
             fill_participant_name()
 
@@ -284,16 +295,25 @@ elif st.session_state.user_role == 'participant':
                             st.button(label, key=f"participant_key_back_{row_index}_{col_index}", on_click=keypad_backspace, use_container_width=True)
                         else:
                             st.button(label, key=f"participant_key_{value}", on_click=keypad_add_digit, args=(value,), use_container_width=True)
-        if st.button("참여 등록하기"):
+        if st.button("참여 등록하기", key="participant_submit"):
             valid, grade, class_num, number = parse_student_id(sid)
             if "행사 없음" in selected: st.error("등록 가능한 행사가 없습니다.")
             elif "[마감]" in selected: st.error("마감된 행사입니다. 도서부원에게 문의해 주세요.")
             elif not valid or not pname.strip(): st.error("올바른 5자리 학번과 이름을 입력해 주세요.")
             else:
                 event = clean_event(selected)
-                db_add_participant({"event_name":event,"student_id":sid.strip(),"grade":grade,"class":class_num,"number":number,"name":pname.strip(),"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
-                db_add_log("참여자 등록", f"[{event}] {sid} {pname.strip()} 등록 완료", "참여자 본인")
-                st.success(f"{pname.strip()}님, 정상적으로 등록되었습니다!")
+                if db_participant_exists(event, sid.strip()):
+                    st.warning("이 학생은 이미 해당 행사에 등록되어 있습니다. 중복 등록은 저장하지 않았습니다.")
+                else:
+                    registered_name = pname.strip()
+                    db_add_participant({"event_name":event,"student_id":sid.strip(),"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
+                    db_add_log("참여자 등록", f"[{event}] {sid} {registered_name} 등록 완료", "참여자 본인")
+                    st.session_state["participant_sid"] = ""
+                    st.session_state["participant_name"] = ""
+                    st.session_state["participant_registration_flash"] = f"{registered_name}님, 정상적으로 등록되었습니다!"
+                    st.rerun()
+        if st.session_state.get("participant_registration_flash"):
+            st.success(st.session_state.pop("participant_registration_flash"))
 
 # ------------------------------------------------------------
 # Staff administration dashboard
@@ -305,6 +325,18 @@ elif st.session_state.user_role == 'staff':
     with h2:
         if st.button("로그아웃"):
             st.session_state.user_role = None; st.session_state.staff_info = None; st.rerun()
+    # 관리자 첫 화면에서 핵심 현황을 바로 확인
+    overview_p = db_get_participants()
+    overview_e = db_get_events()
+    today_key = now_seoul().strftime("%Y-%m-%d")
+    today_count = int(overview_p["timestamp"].astype(str).str.startswith(today_key).sum()) if not overview_p.empty else 0
+    active_events = int((overview_e["status"] == "진행 중").sum()) if not overview_e.empty else 0
+    overview_cols = st.columns(4)
+    overview_cols[0].metric("오늘 참여 등록", f"{today_count:,}건")
+    overview_cols[1].metric("전체 참여 기록", f"{len(overview_p):,}건")
+    overview_cols[2].metric("진행 중인 행사", f"{active_events:,}개")
+    overview_cols[3].metric("참여 학생 수", f"{overview_p['student_id'].nunique():,}명" if not overview_p.empty else "0명")
+
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["출석 등록", "행사 관리", "통계 대시보드", "처리 이력", "백업/복원"])
 
     with tab1:
@@ -338,9 +370,12 @@ elif st.session_state.user_role == 'staff':
                 elif "[마감]" in selected: st.error("마감된 행사입니다. 행사 상태를 확인해 주세요.")
                 else:
                     event = clean_event(selected)
-                    db_add_participant({"event_name":event,"student_id":search_id.strip(),"grade":grade,"class":class_num,"number":number,"name":search_name.strip(),"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
-                    db_add_log("참여자 등록", f"[{event}] {search_id} {search_name.strip()} 등록 완료", st.session_state.staff_info)
-                    st.success(f"{search_name.strip()}님 출석 등록 완료!"); st.rerun()
+                    if db_participant_exists(event, search_id.strip()):
+                        st.warning("이 학생은 이미 해당 행사에 등록되어 있습니다. 중복 출석 등록은 저장하지 않았습니다.")
+                    else:
+                        db_add_participant({"event_name":event,"student_id":search_id.strip(),"grade":grade,"class":class_num,"number":number,"name":search_name.strip(),"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
+                        db_add_log("참여자 등록", f"[{event}] {search_id} {search_name.strip()} 등록 완료", st.session_state.staff_info)
+                        st.success(f"{search_name.strip()}님 출석 등록 완료!"); st.rerun()
         st.divider()
         st.markdown('<h3>금일 참여자 출석 현황 관리</h3>', unsafe_allow_html=True)
         today = now_seoul().strftime("%Y-%m-%d")
@@ -352,7 +387,18 @@ elif st.session_state.user_role == 'staff':
                     info, delete_col, edit_col = st.columns([5, 1, 1])
                     info.markdown(f"**{row['event_name']}**  \n{row['student_id']} {row['name']} · {row['timestamp']}")
                     if delete_col.button("삭제", key=f"del_{row['id']}"):
-                        db_delete_participant(int(row['id'])); db_add_log("데이터 삭제", f"참여자 ID {row['id']} 삭제됨", st.session_state.staff_info); st.rerun()
+                        st.session_state[f"confirm_participant_delete_{row['id']}"] = True
+                    if st.session_state.get(f"confirm_participant_delete_{row['id']}", False):
+                        st.warning(f"{row['student_id']} {row['name']}의 참여 기록을 삭제할까요?")
+                        confirm_col, cancel_col = st.columns(2)
+                        if confirm_col.button("삭제 확인", key=f"confirm_del_{row['id']}"):
+                            db_delete_participant(int(row['id']))
+                            db_add_log("데이터 삭제", f"참여자 ID {row['id']} 삭제됨", st.session_state.staff_info)
+                            st.session_state.pop(f"confirm_participant_delete_{row['id']}", None)
+                            st.rerun()
+                        if cancel_col.button("취소", key=f"cancel_del_{row['id']}"):
+                            st.session_state.pop(f"confirm_participant_delete_{row['id']}", None)
+                            st.rerun()
                     with edit_col.popover("수정"):
                         mod_name = st.text_input("이름", value=row['name'], key=f"edit_name_{row['id']}")
                         mod_sid = st.text_input("학번", value=str(row['student_id']), key=f"edit_sid_{row['id']}", max_chars=5)
@@ -402,43 +448,75 @@ elif st.session_state.user_role == 'staff':
                                 st.session_state.pop(f"confirm_event_delete_{ev['id']}", None); st.rerun()
 
     with tab3:
-        st.markdown('<div class="eyebrow">STATISTICS</div><h3>참여 통계</h3><p class="muted">주요 수치를 먼저 확인하고, 아래에서 행사별·학년별 현황을 살펴보세요.</p>', unsafe_allow_html=True)
+        st.markdown('<div class="eyebrow">STATISTICS</div><h3>참여 통계</h3><p class="muted">행사와 기간을 선택해 필요한 참여 기록을 확인하고 엑셀로 내려받을 수 있습니다.</p>', unsafe_allow_html=True)
         df_all = db_get_participants()
         if df_all.empty:
             st.info("통계를 표시할 참여 기록이 없습니다.")
         else:
-            total_records = len(df_all)
-            unique_students = df_all["student_id"].nunique()
-            unique_events = df_all["event_name"].nunique()
-            m1, m2, m3 = st.columns(3)
-            m1.metric("총 참여 기록", f"{total_records:,}건")
-            m2.metric("참여 학생 수", f"{unique_students:,}명")
-            m3.metric("참여한 행사 수", f"{unique_events:,}개")
-            event_counts = df_all["event_name"].value_counts().rename_axis("행사명").reset_index(name="참여 건수")
-            grade_counts = df_all["grade"].value_counts().sort_index().rename_axis("학년").reset_index(name="참여 건수")
-            monthly = df_all.copy()
-            monthly["월"] = monthly["timestamp"].astype(str).str[:7]
-            monthly_counts = monthly.groupby("월").size().reset_index(name="참여 건수").sort_values("월")
-            st.markdown("#### 행사별 참여 현황")
-            st.bar_chart(event_counts.set_index("행사명"), use_container_width=True)
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("#### 학년별 참여 현황")
-                st.bar_chart(grade_counts.set_index("학년"), use_container_width=True)
-            with c2:
-                st.markdown("#### 월별 참여 현황")
-                st.line_chart(monthly_counts.set_index("월"), use_container_width=True)
-            st.markdown("#### 통계 표")
-            t1, t2 = st.tabs(["행사별", "학년별"])
-            with t1: st.dataframe(event_counts, use_container_width=True, hide_index=True)
-            with t2: st.dataframe(grade_counts, use_container_width=True, hide_index=True)
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                df_all.to_excel(writer, sheet_name="참여 기록", index=False)
-                event_counts.to_excel(writer, sheet_name="행사별 통계", index=False)
-                grade_counts.to_excel(writer, sheet_name="학년별 통계", index=False)
-                monthly_counts.to_excel(writer, sheet_name="월별 통계", index=False)
-            st.download_button("통계 엑셀 파일 다운로드", data=output.getvalue(), file_name=f"행사_참여_통계_{now_seoul().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            # 필터 옵션
+            sf1, sf2, sf3 = st.columns([1.4, 1, 1])
+            event_names = sorted(df_all["event_name"].dropna().astype(str).unique().tolist())
+            grade_values = sorted(pd.to_numeric(df_all["grade"], errors="coerce").dropna().astype(int).unique().tolist())
+            with sf1:
+                stat_events = st.multiselect("행사 필터", event_names, default=[], key="stat_events")
+            with sf2:
+                stat_grades = st.multiselect("학년 필터", grade_values, default=[], format_func=lambda x: f"{x}학년", key="stat_grades")
+            with sf3:
+                stat_operator = st.selectbox("등록 경로", ["전체", "참여자 본인"] + sorted([x for x in df_all["operator"].dropna().astype(str).unique().tolist() if x != "참여자 본인"]), key="stat_operator")
+            stat_date_filter = st.checkbox("기간 필터 사용", key="stat_date_filter")
+            stat_from = stat_to = None
+            if stat_date_filter:
+                valid_dates = pd.to_datetime(df_all["timestamp"], errors="coerce").dropna()
+                min_date = valid_dates.min().date() if not valid_dates.empty else now_seoul().date()
+                max_date = valid_dates.max().date() if not valid_dates.empty else now_seoul().date()
+                sd1, sd2 = st.columns(2)
+                with sd1: stat_from = st.date_input("시작 날짜", value=min_date, key="stat_from")
+                with sd2: stat_to = st.date_input("종료 날짜", value=max_date, key="stat_to")
+            filtered = df_all.copy()
+            if stat_events: filtered = filtered[filtered["event_name"].astype(str).isin(stat_events)]
+            if stat_grades: filtered = filtered[pd.to_numeric(filtered["grade"], errors="coerce").isin(stat_grades)]
+            if stat_operator != "전체": filtered = filtered[filtered["operator"].astype(str) == stat_operator]
+            timestamps = pd.to_datetime(filtered["timestamp"], errors="coerce")
+            if stat_from: filtered = filtered[timestamps.dt.date >= stat_from]
+            if stat_to:
+                timestamps = pd.to_datetime(filtered["timestamp"], errors="coerce")
+                filtered = filtered[timestamps.dt.date <= stat_to]
+            if stat_from and stat_to and stat_from > stat_to:
+                st.error("시작 날짜는 종료 날짜보다 늦을 수 없습니다.")
+            else:
+                total_records = len(filtered)
+                unique_students = filtered["student_id"].nunique() if not filtered.empty else 0
+                unique_events = filtered["event_name"].nunique() if not filtered.empty else 0
+                m1, m2, m3 = st.columns(3)
+                m1.metric("필터 적용 참여 기록", f"{total_records:,}건")
+                m2.metric("참여 학생 수", f"{unique_students:,}명")
+                m3.metric("참여한 행사 수", f"{unique_events:,}개")
+                if filtered.empty:
+                    st.info("선택한 조건에 해당하는 참여 기록이 없습니다.")
+                else:
+                    event_counts = filtered["event_name"].value_counts().rename_axis("행사명").reset_index(name="참여 건수")
+                    grade_counts = filtered["grade"].value_counts().sort_index().rename_axis("학년").reset_index(name="참여 건수")
+                    monthly = filtered.copy()
+                    monthly["월"] = monthly["timestamp"].astype(str).str[:7]
+                    monthly_counts = monthly.groupby("월").size().reset_index(name="참여 건수").sort_values("월")
+                    st.markdown("#### 행사별 참여 현황")
+                    st.bar_chart(event_counts.set_index("행사명"), use_container_width=True)
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("#### 학년별 참여 현황")
+                        st.bar_chart(grade_counts.set_index("학년"), use_container_width=True)
+                    with c2:
+                        st.markdown("#### 월별 참여 현황")
+                        st.line_chart(monthly_counts.set_index("월"), use_container_width=True)
+                    st.markdown("#### 필터 적용 기록")
+                    st.dataframe(filtered, use_container_width=True, hide_index=True)
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                        filtered.to_excel(writer, sheet_name="필터 적용 기록", index=False)
+                        event_counts.to_excel(writer, sheet_name="행사별 통계", index=False)
+                        grade_counts.to_excel(writer, sheet_name="학년별 통계", index=False)
+                        monthly_counts.to_excel(writer, sheet_name="월별 통계", index=False)
+                    st.download_button("필터 결과 엑셀 다운로드", data=output.getvalue(), file_name=f"행사_참여_통계_{now_seoul().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     with tab4:
         st.markdown('<div class="eyebrow">ACTIVITY LOG</div><h3>처리 이력</h3><p class="muted">필터로 필요한 기록만 확인하거나 선택한 기록만 삭제할 수 있습니다.</p>', unsafe_allow_html=True)
@@ -477,6 +555,7 @@ elif st.session_state.user_role == 'staff':
                         ids = [options[label] for label in selected_log_labels]
                         with get_db_connection() as conn:
                             conn.executemany("DELETE FROM logs WHERE id = ?", [(log_id,) for log_id in ids])
+                        db_add_log("처리 이력 삭제", f"관리자가 처리 이력 {len(ids)}건을 삭제함", st.session_state.staff_info)
                         st.success(f"처리 이력 {len(ids)}건을 삭제했습니다.")
                         st.rerun()
                 else:
