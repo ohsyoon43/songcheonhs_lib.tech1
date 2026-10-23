@@ -272,7 +272,7 @@ elif st.session_state.user_role == 'participant':
             st.session_state.user_role = None; st.rerun()
     _, formcol, _ = st.columns([0.7, 2.2, 0.7])
     with formcol:
-        st.markdown('<div class="glass-card"><b>참여 정보를 입력해 주세요</b><p class="muted">행사를 선택하고 학번과 이름을 입력하면 등록됩니다.</p></div>', unsafe_allow_html=True)
+        st.markdown('<div class="glass-card"><b>참여 정보를 입력해 주세요</b><p class="muted">행사를 선택하고 학번을 입력하면 등록됩니다. 이름은 자동으로 채워지며, 모르는 경우 학번만으로도 등록할 수 있어요.</p></div>', unsafe_allow_html=True)
         df_events = db_get_events()
         selected = st.selectbox("참여할 행사", event_options(df_events), key="participant_event")
         sid = st.text_input("학번 (5자리)", placeholder="예: 10101", max_chars=5, key="participant_sid", on_change=fill_participant_name, help="학번을 입력하면 기존 등록 정보가 있을 때 이름이 자동으로 채워집니다.")
@@ -299,18 +299,20 @@ elif st.session_state.user_role == 'participant':
             valid, grade, class_num, number = parse_student_id(sid)
             if "행사 없음" in selected: st.error("등록 가능한 행사가 없습니다.")
             elif "[마감]" in selected: st.error("마감된 행사입니다. 도서부원에게 문의해 주세요.")
-            elif not valid or not pname.strip(): st.error("올바른 5자리 학번과 이름을 입력해 주세요.")
+            elif not valid: st.error("올바른 5자리 학번을 입력해 주세요.")
             else:
                 event = clean_event(selected)
                 if db_participant_exists(event, sid.strip()):
                     st.warning("이 학생은 이미 해당 행사에 등록되어 있습니다. 중복 등록은 저장하지 않았습니다.")
                 else:
-                    registered_name = pname.strip()
+                    # 이름을 입력하지 않아도 등록 가능. 기존 기록에 이름이 있으면 자동 활용.
+                    registered_name = pname.strip() or find_student_name(sid.strip()) or "이름 미입력"
                     db_add_participant({"event_name":event,"student_id":sid.strip(),"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
                     db_add_log("참여자 등록", f"[{event}] {sid} {registered_name} 등록 완료", "참여자 본인")
                     st.session_state["participant_sid"] = ""
                     st.session_state["participant_name"] = ""
-                    st.session_state["participant_registration_flash"] = f"{registered_name}님, 정상적으로 등록되었습니다!"
+                    note = "" if registered_name != "이름 미입력" else " 이름은 관리자 화면에서 나중에 수정할 수 있어요."
+                    st.session_state["participant_registration_flash"] = f"학번 {sid} 등록이 완료되었습니다!{note}"
                     st.rerun()
         if st.session_state.get("participant_registration_flash"):
             st.success(st.session_state.pop("participant_registration_flash"))
@@ -366,48 +368,71 @@ elif st.session_state.user_role == 'staff':
                 ctime = st.time_input("시간", value=now_seoul().time().replace(tzinfo=None, microsecond=0), key="retro_time")
             if st.button("출석 등록 완료"):
                 if "행사 없음" in selected: st.error("행사를 선택해 주세요.")
-                elif not valid or not search_name.strip(): st.error("올바른 5자리 학번과 이름을 입력해 주세요.")
+                elif not valid: st.error("올바른 5자리 학번을 입력해 주세요.")
                 elif "[마감]" in selected: st.error("마감된 행사입니다. 행사 상태를 확인해 주세요.")
                 else:
                     event = clean_event(selected)
                     if db_participant_exists(event, search_id.strip()):
                         st.warning("이 학생은 이미 해당 행사에 등록되어 있습니다. 중복 출석 등록은 저장하지 않았습니다.")
                     else:
-                        db_add_participant({"event_name":event,"student_id":search_id.strip(),"grade":grade,"class":class_num,"number":number,"name":search_name.strip(),"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
-                        db_add_log("참여자 등록", f"[{event}] {search_id} {search_name.strip()} 등록 완료", st.session_state.staff_info)
-                        st.success(f"{search_name.strip()}님 출석 등록 완료!"); st.rerun()
+                        registered_name = search_name.strip() or find_student_name(search_id.strip()) or "이름 미입력"
+                        db_add_participant({"event_name":event,"student_id":search_id.strip(),"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
+                        db_add_log("참여자 등록", f"[{event}] {search_id} {registered_name} 등록 완료", st.session_state.staff_info)
+                        st.success(f"학번 {search_id} 출석 등록 완료!"); st.rerun()
         st.divider()
-        st.markdown('<h3>금일 참여자 출석 현황 관리</h3>', unsafe_allow_html=True)
-        today = now_seoul().strftime("%Y-%m-%d")
-        todays = df_p[df_p['timestamp'].astype(str).str.startswith(today)] if not df_p.empty else pd.DataFrame()
-        if todays.empty: st.info("오늘 등록된 출석 기록이 없습니다.")
+        st.markdown('<h3>참여 기록 관리</h3><p class="muted">오늘 기록뿐 아니라 과거 기록도 검색해 여러 건을 한 번에 삭제할 수 있습니다.</p>', unsafe_allow_html=True)
+        all_records = db_get_participants()
+        if all_records.empty:
+            st.info("삭제할 참여 기록이 없습니다.")
         else:
-            for _, row in todays.iterrows():
-                with st.container(border=True):
-                    info, delete_col, edit_col = st.columns([5, 1, 1])
-                    info.markdown(f"**{row['event_name']}**  \n{row['student_id']} {row['name']} · {row['timestamp']}")
-                    if delete_col.button("삭제", key=f"del_{row['id']}"):
-                        st.session_state[f"confirm_participant_delete_{row['id']}"] = True
-                    if st.session_state.get(f"confirm_participant_delete_{row['id']}", False):
-                        st.warning(f"{row['student_id']} {row['name']}의 참여 기록을 삭제할까요?")
-                        confirm_col, cancel_col = st.columns(2)
-                        if confirm_col.button("삭제 확인", key=f"confirm_del_{row['id']}"):
-                            db_delete_participant(int(row['id']))
-                            db_add_log("데이터 삭제", f"참여자 ID {row['id']} 삭제됨", st.session_state.staff_info)
-                            st.session_state.pop(f"confirm_participant_delete_{row['id']}", None)
+            r1, r2, r3 = st.columns([1.2, 1.2, 1.6])
+            with r1:
+                record_scope = st.selectbox("기록 범위", ["오늘", "전체 기록"], key="record_scope")
+            with r2:
+                record_event_options = ["전체 행사"] + sorted(all_records["event_name"].dropna().astype(str).unique().tolist())
+                record_event = st.selectbox("행사", record_event_options, key="record_event_filter")
+            with r3:
+                record_query = st.text_input("학번 또는 이름 검색", key="record_search", placeholder="학번/이름 일부 입력")
+            record_view = all_records.copy()
+            if record_scope == "오늘":
+                record_view = record_view[record_view["timestamp"].astype(str).str.startswith(now_seoul().strftime("%Y-%m-%d"))]
+            if record_event != "전체 행사":
+                record_view = record_view[record_view["event_name"].astype(str) == record_event]
+            if record_query.strip():
+                q = record_query.strip()
+                record_view = record_view[record_view["student_id"].astype(str).str.contains(q, case=False, na=False) | record_view["name"].astype(str).str.contains(q, case=False, na=False)]
+            st.caption(f"검색 결과 {len(record_view):,}건")
+            if record_view.empty:
+                st.info("조건에 맞는 기록이 없습니다.")
+            else:
+                st.dataframe(record_view[["id", "event_name", "student_id", "name", "timestamp", "operator"]], use_container_width=True, hide_index=True)
+                record_labels = {f"#{int(row['id'])} · {row['event_name']} · {row['student_id']} {row['name']} · {row['timestamp']}": int(row['id']) for _, row in record_view.iterrows()}
+                selected_record_labels = st.multiselect("삭제할 기록 선택", list(record_labels.keys()), key="bulk_delete_records", placeholder="삭제할 기록을 선택하세요")
+                confirm_bulk_delete = st.checkbox("선택한 기록을 영구 삭제하는 것에 동의합니다.", key="confirm_bulk_delete_records", disabled=not selected_record_labels)
+                if st.button("선택한 참여 기록 삭제", type="primary", disabled=(not selected_record_labels or not confirm_bulk_delete), key="bulk_delete_records_btn"):
+                    ids_to_delete = [record_labels[label] for label in selected_record_labels]
+                    with get_db_connection() as conn:
+                        conn.executemany("DELETE FROM participants WHERE id=?", [(rid,) for rid in ids_to_delete])
+                    db_add_log("데이터 삭제", f"관리자가 참여 기록 {len(ids_to_delete)}건을 삭제함", st.session_state.staff_info)
+                    st.session_state.pop("bulk_delete_records", None)
+                    st.session_state.pop("confirm_bulk_delete_records", None)
+                    st.success(f"참여 기록 {len(ids_to_delete)}건을 삭제했습니다.")
+                    st.rerun()
+                with st.expander("선택한 기록 수정"):
+                    edit_label = st.selectbox("수정할 기록", list(record_labels.keys()), key="edit_record_choice")
+                    edit_id = record_labels[edit_label]
+                    edit_row = record_view[record_view["id"] == edit_id].iloc[0]
+                    mod_name = st.text_input("이름", value=str(edit_row["name"]), key="bulk_edit_name")
+                    mod_sid = st.text_input("학번", value=str(edit_row["student_id"]), max_chars=5, key="bulk_edit_sid")
+                    if st.button("수정 내용 저장", key="bulk_edit_save"):
+                        ok, g, cl, num = parse_student_id(mod_sid)
+                        if ok and mod_name.strip():
+                            db_update_participant(int(edit_id), str(edit_row["event_name"]), mod_sid.strip(), g, cl, num, mod_name.strip())
+                            db_add_log("데이터 수정", f"참여 기록 ID {edit_id} 수정 완료", st.session_state.staff_info)
+                            st.success("기록을 수정했습니다.")
                             st.rerun()
-                        if cancel_col.button("취소", key=f"cancel_del_{row['id']}"):
-                            st.session_state.pop(f"confirm_participant_delete_{row['id']}", None)
-                            st.rerun()
-                    with edit_col.popover("수정"):
-                        mod_name = st.text_input("이름", value=row['name'], key=f"edit_name_{row['id']}")
-                        mod_sid = st.text_input("학번", value=str(row['student_id']), key=f"edit_sid_{row['id']}", max_chars=5)
-                        if st.button("변경 저장", key=f"save_{row['id']}"):
-                            ok, g, cl, num = parse_student_id(mod_sid)
-                            if ok and mod_name.strip():
-                                db_update_participant(int(row['id']), row['event_name'], mod_sid.strip(), g, cl, num, mod_name.strip())
-                                db_add_log("데이터 수정", f"참여자 ID {row['id']} 수정 완료", st.session_state.staff_info); st.success("수정 완료"); st.rerun()
-                            else: st.error("올바른 학번과 이름을 입력해 주세요.")
+                        else:
+                            st.error("올바른 5자리 학번과 이름을 입력해 주세요.")
 
     with tab2:
         st.markdown('<div class="eyebrow">EVENT MANAGEMENT</div><h3>신규 행사 개설</h3>', unsafe_allow_html=True)
@@ -454,14 +479,17 @@ elif st.session_state.user_role == 'staff':
             st.info("통계를 표시할 참여 기록이 없습니다.")
         else:
             # 필터 옵션
-            sf1, sf2, sf3 = st.columns([1.4, 1, 1])
+            sf1, sf2, sf3, sf4 = st.columns([1.4, 1, 1, 1])
             event_names = sorted(df_all["event_name"].dropna().astype(str).unique().tolist())
             grade_values = sorted(pd.to_numeric(df_all["grade"], errors="coerce").dropna().astype(int).unique().tolist())
             with sf1:
                 stat_events = st.multiselect("행사 필터", event_names, default=[], key="stat_events")
             with sf2:
                 stat_grades = st.multiselect("학년 필터", grade_values, default=[], format_func=lambda x: f"{x}학년", key="stat_grades")
+            class_values = sorted(pd.to_numeric(df_all["class"], errors="coerce").dropna().astype(int).unique().tolist())
             with sf3:
+                stat_classes = st.multiselect("반 필터", class_values, default=[], format_func=lambda x: f"{x}반", key="stat_classes")
+            with sf4:
                 stat_operator = st.selectbox("등록 경로", ["전체", "참여자 본인"] + sorted([x for x in df_all["operator"].dropna().astype(str).unique().tolist() if x != "참여자 본인"]), key="stat_operator")
             stat_date_filter = st.checkbox("기간 필터 사용", key="stat_date_filter")
             stat_from = stat_to = None
@@ -475,6 +503,7 @@ elif st.session_state.user_role == 'staff':
             filtered = df_all.copy()
             if stat_events: filtered = filtered[filtered["event_name"].astype(str).isin(stat_events)]
             if stat_grades: filtered = filtered[pd.to_numeric(filtered["grade"], errors="coerce").isin(stat_grades)]
+            if stat_classes: filtered = filtered[pd.to_numeric(filtered["class"], errors="coerce").isin(stat_classes)]
             if stat_operator != "전체": filtered = filtered[filtered["operator"].astype(str) == stat_operator]
             timestamps = pd.to_datetime(filtered["timestamp"], errors="coerce")
             if stat_from: filtered = filtered[timestamps.dt.date >= stat_from]
@@ -499,6 +528,8 @@ elif st.session_state.user_role == 'staff':
                     monthly = filtered.copy()
                     monthly["월"] = monthly["timestamp"].astype(str).str[:7]
                     monthly_counts = monthly.groupby("월").size().reset_index(name="참여 건수").sort_values("월")
+                    class_counts = (filtered.assign(학급=filtered["grade"].astype(str) + "학년 " + filtered["class"].astype(str) + "반")
+                                    .groupby("학급").size().sort_values(ascending=False).rename("참여 건수").reset_index())
                     st.markdown("#### 행사별 참여 현황")
                     st.bar_chart(event_counts.set_index("행사명"), use_container_width=True)
                     c1, c2 = st.columns(2)
@@ -508,6 +539,13 @@ elif st.session_state.user_role == 'staff':
                     with c2:
                         st.markdown("#### 월별 참여 현황")
                         st.line_chart(monthly_counts.set_index("월"), use_container_width=True)
+                    st.markdown("#### 학급별 참여 현황")
+                    if not class_counts.empty:
+                        top_count = int(class_counts["참여 건수"].max())
+                        top_classes = class_counts[class_counts["참여 건수"] == top_count]["학급"].astype(str).tolist()
+                        st.success(f"가장 많이 참여한 학급: {', '.join(top_classes)} · {top_count:,}건")
+                        st.bar_chart(class_counts.set_index("학급"), use_container_width=True)
+                        st.dataframe(class_counts, use_container_width=True, hide_index=True)
                     st.markdown("#### 필터 적용 기록")
                     st.dataframe(filtered, use_container_width=True, hide_index=True)
                     output = BytesIO()
@@ -515,6 +553,7 @@ elif st.session_state.user_role == 'staff':
                         filtered.to_excel(writer, sheet_name="필터 적용 기록", index=False)
                         event_counts.to_excel(writer, sheet_name="행사별 통계", index=False)
                         grade_counts.to_excel(writer, sheet_name="학년별 통계", index=False)
+                        class_counts.to_excel(writer, sheet_name="학급별 통계", index=False)
                         monthly_counts.to_excel(writer, sheet_name="월별 통계", index=False)
                     st.download_button("필터 결과 엑셀 다운로드", data=output.getvalue(), file_name=f"행사_참여_통계_{now_seoul().strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
