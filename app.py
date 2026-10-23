@@ -242,7 +242,7 @@ h1,h2,h3,h4 { color:#20232b; letter-spacing:-.65px; }
 [data-testid="stTextInput"] input { min-height:54px !important; font-size:17px !important; }
 [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:54px !important; font-size:16px !important; }
 .stMetric { background:rgba(255,255,255,.78); border:1px solid rgba(255,255,255,.95); border-radius:20px; padding:18px 20px; box-shadow:0 10px 26px rgba(51,65,97,.06); }
-@media (max-width: 760px) { .block-container { padding-left:1rem; padding-right:1rem; padding-top:1rem; } .brandbar { padding:15px 17px; border-radius:20px; align-items:flex-start; flex-direction:column; } .hero-card { padding:28px 19px; } .glass-card { padding:19px; } .section-title { font-size:24px; } [data-testid="stTabs"] [data-baseweb="tab-list"] { flex-wrap:wrap; } [data-testid="stDataFrame"] { max-width:100%; } .stMetric { padding:13px; } }
+@media (max-width: 760px) { .block-container { padding-left:1rem; padding-right:1rem; padding-top:1rem; } .brandbar { padding:15px 17px; border-radius:20px; align-items:flex-start; flex-direction:column; } .hero-card { padding:28px 19px; } .glass-card { padding:19px; } .section-title { font-size:24px; } [data-testid="stTabs"] [data-baseweb="tab-list"] { flex-wrap:wrap; } [data-testid="stDataFrame"] { max-width:100%; } .stMetric { padding:7px 9px !important; border-radius:12px !important; box-shadow:none !important; } [data-testid="stMetricLabel"] { font-size:11px !important; line-height:1.2 !important; } [data-testid="stMetricValue"] { font-size:18px !important; line-height:1.25 !important; } [data-testid="stMetricDelta"] { font-size:10px !important; } }
 @media (hover: none) and (pointer: coarse) { .stButton > button, .stDownloadButton > button { min-height:52px; } [data-testid="stTextInput"] input { min-height:58px !important; font-size:18px !important; } }
 </style>''', unsafe_allow_html=True)
 
@@ -325,8 +325,24 @@ def clear_persisted_login():
 if st.session_state.user_role is None:
     spacer1, main, spacer2 = st.columns([1, 1.35, 1])
     with main:
-        st.markdown('''<div class="hero-card"><div class="eyebrow">EVENT MANAGEMENT</div><div class="hero-title">인천송천고 도서관</div><p class="hero-subtitle">행사 출석 등록부터 통합 데이터 관리까지<br>한곳에서 간편하게 관리하세요.</p><span class="pill">SONGCHEON EVENT SYSTEM</span></div>''', unsafe_allow_html=True)
+        st.markdown('''<div class="hero-card"><div class="eyebrow">EVENT MANAGEMENT</div><div class="hero-title">인천송천고 도서관</div><p class="hero-subtitle">행사 참여 등록부터 통합 데이터 관리까지<br>한곳에서 간편하게 관리하세요.</p><span class="pill">SONGCHEON EVENT SYSTEM</span></div>''', unsafe_allow_html=True)
         st.write("")
+        with st.expander("📘 사용 설명 보기", expanded=False):
+            st.markdown("""
+            **1. 학생 · 일반 참여자**
+            - `학생 · 일반 참여자 등록`을 선택합니다.
+            - 참여할 행사를 고르고 학번 5자리와 이름을 입력한 뒤 **참여 등록하기**를 누릅니다.
+            - 같은 날 같은 행사에 이미 등록한 경우 경고가 표시됩니다. 중복 등록을 원할 때만 **네, 중복 등록**을 선택하세요.
+
+            **2. 사서교사 · 도서부원**
+            - 관리자 로그인을 선택하고 직위와 담당자 정보를 입력합니다.
+            - **참여 등록** 탭에서 학생 정보를 확인하고 행사 참여를 등록할 수 있습니다.
+            - **행사 관리**에서 행사를 개설·수정·마감할 수 있고, **통계 대시보드**에서 참여 현황을 확인할 수 있습니다.
+
+            **3. 유의 사항**
+            - 행사 목록에 등록할 행사가 없거나 행사가 마감된 경우 관리자에게 문의하세요.
+            - 학번과 이름을 정확히 확인한 뒤 등록해 주세요.
+            """)
         if st.button("학생 · 일반 참여자 등록", use_container_width=True):
             st.session_state.user_role = 'participant'; persist_login('participant'); st.rerun()
         if st.button("사서교사 · 도서부원 관리자 로그인", use_container_width=True):
@@ -441,7 +457,7 @@ elif st.session_state.user_role == 'staff':
     overview_cols[2].metric("진행 중인 행사", f"{active_events:,}개")
     overview_cols[3].metric("참여 학생 수", f"{overview_p['student_id'].nunique():,}명" if not overview_p.empty else "0명")
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["출석 등록", "행사 관리", "통계 대시보드", "처리 이력", "백업/복원"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["참여 등록", "행사 관리", "통계 대시보드", "처리 이력", "백업/복원"])
 
     with tab1:
         df_p = db_get_participants(); df_e = db_get_events()
@@ -463,7 +479,7 @@ elif st.session_state.user_role == 'staff':
                 else:
                     st.info("과거 참여 이력이 없습니다.")
         with right:
-            st.markdown('<div class="eyebrow">ATTENDANCE</div><h3>행사 출석 확인 및 등록</h3><p class="muted">행사를 선택하고 학생 정보를 확인한 뒤 등록합니다.</p>', unsafe_allow_html=True)
+            st.markdown('<div class="eyebrow">PARTICIPATION</div><h3>행사 참여 확인 및 등록</h3><p class="muted">행사를 선택하고 학생 정보를 확인한 뒤 등록합니다.</p>', unsafe_allow_html=True)
             selected = st.selectbox("등록할 행사", event_options(df_e), key="staff_event")
             with st.expander("일시 수동 지정 (소급 등록)"):
                 cdate = st.date_input("날짜", value=now_seoul().date(), key="retro_date")
@@ -471,7 +487,7 @@ elif st.session_state.user_role == 'staff':
             admin_day = cdate
             pending_admin = (clean_event(selected), search_id.strip(), admin_day.isoformat())
             is_pending_admin = st.session_state.get("pending_admin_duplicate") == pending_admin
-            submit_admin = st.button("출석 등록 완료", key="staff_attendance_submit")
+            submit_admin = st.button("참여 등록 완료", key="staff_attendance_submit")
             confirm_admin = False
             cancel_admin = False
             if is_pending_admin:
@@ -500,7 +516,7 @@ elif st.session_state.user_role == 'staff':
                         db_add_participant({"event_name":event,"student_id":search_id.strip(),"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
                         db_add_log("참여자 등록", f"[{event}] {search_id} {registered_name} 등록 완료", st.session_state.staff_info)
                         st.session_state.pop("pending_admin_duplicate", None)
-                        st.success(f"학번 {search_id} 출석 등록 완료!"); st.rerun()
+                        st.success(f"학번 {search_id} 참여 등록 완료!"); st.rerun()
         st.divider()
         st.markdown('<h3>참여 기록 관리</h3><p class="muted">오늘 기록뿐 아니라 과거 기록도 검색해 여러 건을 한 번에 삭제할 수 있습니다.</p>', unsafe_allow_html=True)
         all_records = db_get_participants()
