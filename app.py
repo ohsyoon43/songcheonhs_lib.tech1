@@ -1,6 +1,7 @@
 import streamlit as st
+import extra_streamlit_components as stx
 import pandas as pd
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from zoneinfo import ZoneInfo
 from io import BytesIO
 import sqlite3
@@ -71,6 +72,17 @@ def db_update_event_status(event_id, new_status):
     with get_db_connection() as conn:
         conn.execute("UPDATE events SET status=? WHERE id=?", (new_status,event_id))
 
+def db_update_event_details(event_id, old_name, new_name, event_type, description):
+    """행사 정보를 수정하고, 행사명 변경 시 연결된 참여/보관 기록도 함께 갱신한다."""
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE events SET name=?, event_type=?, description=? WHERE id=?",
+            (new_name, event_type, description, event_id),
+        )
+        if old_name != new_name:
+            conn.execute("UPDATE participants SET event_name=? WHERE event_name=?", (new_name, old_name))
+            conn.execute("UPDATE deleted_participants SET event_name=? WHERE event_name=?", (new_name, old_name))
+
 def db_delete_event_and_records(event_id, event_name, deleted_by="관리자"):
     # 행사 삭제 시 연결된 참여 기록도 복구 보관함에 먼저 보관한다.
     with get_db_connection() as conn:
@@ -88,7 +100,7 @@ def db_add_participant(data):
             VALUES (?,?,?,?,?,?,?,?)''', (data['event_name'],data['student_id'],data['grade'],data['class'],data['number'],data['name'],data['timestamp'],data['operator']))
 
 def db_participant_exists(event_name, student_id, exclude_id=None):
-    """행사별 동일 학번의 중복 참여 등록 여부를 확인한다."""
+    """기존 호환용: 행사와 학번이 일치하는 참여 기록이 있는지 확인한다."""
     query = "SELECT 1 FROM participants WHERE event_name=? AND student_id=?"
     params = [str(event_name).strip(), str(student_id).strip()]
     if exclude_id is not None:
@@ -97,6 +109,16 @@ def db_participant_exists(event_name, student_id, exclude_id=None):
     query += " LIMIT 1"
     with get_db_connection() as conn:
         return conn.execute(query, params).fetchone() is not None
+
+def db_count_participant_on_date(event_name, student_id, day):
+    """해당 날짜에 같은 학생이 같은 행사에 등록한 횟수."""
+    day_text = day.strftime("%Y-%m-%d") if hasattr(day, "strftime") else str(day)[:10]
+    with get_db_connection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM participants WHERE event_name=? AND student_id=? AND timestamp LIKE ?",
+            (str(event_name).strip(), str(student_id).strip(), f"{day_text}%"),
+        ).fetchone()
+    return int(row[0] or 0)
 
 def db_archive_and_delete_participants(part_ids, deleted_by):
     """Move selected participation rows to a recovery table before deleting them."""
@@ -123,8 +145,6 @@ def db_restore_archived_participant(archive_id, restored_by):
         if row is None:
             return False, "복구할 기록을 찾을 수 없습니다."
         # row: archive_id, original_id, event_name, student_id, grade, class, number, name, timestamp, operator, deleted_at, deleted_by
-        if conn.execute("SELECT 1 FROM participants WHERE event_name=? AND student_id=? LIMIT 1", (row[2], row[3])).fetchone():
-            return False, "같은 행사에 해당 학번의 기록이 이미 있습니다. 중복 복구를 막았습니다."
         conn.execute("""INSERT INTO participants (event_name,student_id,grade,class,number,name,timestamp,operator)
             VALUES (?,?,?,?,?,?,?,?)""", (row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9]))
         conn.execute("DELETE FROM deleted_participants WHERE archive_id=?", (int(archive_id),))
@@ -222,15 +242,6 @@ h1,h2,h3,h4 { color:#20232b; letter-spacing:-.65px; }
 [data-testid="stTextInput"] input { min-height:54px !important; font-size:17px !important; }
 [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:54px !important; font-size:16px !important; }
 .stMetric { background:rgba(255,255,255,.78); border:1px solid rgba(255,255,255,.95); border-radius:20px; padding:18px 20px; box-shadow:0 10px 26px rgba(51,65,97,.06); }
-/* 터치 입력이 주 입력 방식인 휴대폰·태블릿에서만 숫자판 표시 */
-.st-key-mobile_keypad { display:none !important; }
-@media (hover: none) and (pointer: coarse) {
-  .st-key-mobile_keypad { display:block !important; margin:14px 0 20px; }
-  .st-key-mobile_keypad [data-testid="stButton"] > button { min-height:58px; font-size:23px; border-radius:16px; background:rgba(255,255,255,.96); color:#20232b; border:1px solid #dce5f5; box-shadow:0 4px 12px rgba(36,75,140,.08); }
-  .st-key-mobile_keypad [data-testid="stButton"] > button p,
-  .st-key-mobile_keypad [data-testid="stButton"] > button span { color:#20232b !important; font-size:22px; font-weight:750; }
-  .st-key-mobile_keypad [data-testid="stButton"] > button:hover { background:#eaf2ff; border-color:#3182F6; }
-}
 @media (max-width: 760px) { .block-container { padding-left:1rem; padding-right:1rem; padding-top:1rem; } .brandbar { padding:15px 17px; border-radius:20px; align-items:flex-start; flex-direction:column; } .hero-card { padding:28px 19px; } .glass-card { padding:19px; } .section-title { font-size:24px; } [data-testid="stTabs"] [data-baseweb="tab-list"] { flex-wrap:wrap; } [data-testid="stDataFrame"] { max-width:100%; } .stMetric { padding:13px; } }
 @media (hover: none) and (pointer: coarse) { .stButton > button, .stDownloadButton > button { min-height:52px; } [data-testid="stTextInput"] input { min-height:58px !important; font-size:18px !important; } }
 </style>''', unsafe_allow_html=True)
@@ -263,24 +274,6 @@ def fill_participant_name():
     # 학번이 바뀌었는데 이전 학생 이름이 남아 잘못 등록되는 것을 방지
     st.session_state["participant_name"] = matched_name
 
-def keypad_add_digit(digit):
-    current = str(st.session_state.get("participant_sid", ""))
-    if len(current) < 5 and str(digit).isdigit():
-        st.session_state["participant_sid"] = current + str(digit)
-        st.session_state["participant_name"] = ""
-        if len(st.session_state["participant_sid"]) == 5:
-            fill_participant_name()
-
-def keypad_backspace():
-    current = str(st.session_state.get("participant_sid", ""))
-    st.session_state["participant_sid"] = current[:-1]
-    # 이름 자동 입력은 학번이 달라졌을 수 있으므로 지워 사용자가 확인하도록 함
-    st.session_state["participant_name"] = ""
-
-def keypad_clear():
-    st.session_state["participant_sid"] = ""
-    st.session_state["participant_name"] = ""
-
 def fill_staff_student_name():
     sid = st.session_state.get("staff_search_id", "").strip()
     matched_name = find_student_name(sid) if len(sid) == 5 and sid.isdigit() else ""
@@ -295,6 +288,37 @@ def clean_event(value):
 if 'user_role' not in st.session_state: st.session_state.user_role = None
 if 'staff_info' not in st.session_state: st.session_state.staff_info = None
 
+# Keep the selected page/login across browser refreshes with a short-lived browser cookie.
+# This is convenience persistence only, not an authentication/security mechanism.
+cookie_manager = stx.CookieManager(key="persistent_login_cookie_manager")
+try:
+    saved_cookies = cookie_manager.get_all() or {}
+except Exception:
+    saved_cookies = {}
+if st.session_state.user_role is None:
+    saved_role = saved_cookies.get("songcheon_user_role")
+    if saved_role in ("staff", "participant"):
+        st.session_state.user_role = saved_role
+        st.session_state.staff_info = saved_cookies.get("songcheon_staff_info") if saved_role == "staff" else None
+
+def persist_login(role, staff_info=None):
+    expiry = now_seoul() + timedelta(days=7)
+    cookie_manager.set("songcheon_user_role", role, expires_at=expiry)
+    if role == "staff" and staff_info:
+        cookie_manager.set("songcheon_staff_info", staff_info, expires_at=expiry)
+    else:
+        try:
+            cookie_manager.delete("songcheon_staff_info")
+        except Exception:
+            pass
+
+def clear_persisted_login():
+    for cookie_name in ("songcheon_user_role", "songcheon_staff_info"):
+        try:
+            cookie_manager.delete(cookie_name)
+        except Exception:
+            pass
+
 # ------------------------------------------------------------
 # Main landing screen
 # ------------------------------------------------------------
@@ -304,7 +328,7 @@ if st.session_state.user_role is None:
         st.markdown('''<div class="hero-card"><div class="eyebrow">EVENT MANAGEMENT</div><div class="hero-title">인천송천고 도서관</div><p class="hero-subtitle">행사 출석 등록부터 통합 데이터 관리까지<br>한곳에서 간편하게 관리하세요.</p><span class="pill">SONGCHEON EVENT SYSTEM</span></div>''', unsafe_allow_html=True)
         st.write("")
         if st.button("학생 · 일반 참여자 등록", use_container_width=True):
-            st.session_state.user_role = 'participant'; st.rerun()
+            st.session_state.user_role = 'participant'; persist_login('participant'); st.rerun()
         if st.button("사서교사 · 도서부원 관리자 로그인", use_container_width=True):
             st.session_state.user_role = 'staff_login'; st.rerun()
 
@@ -330,11 +354,12 @@ elif st.session_state.user_role == 'staff_login':
                 else:
                     st.session_state.staff_info = f"{staff_type} {staff_std_id} {staff_name.strip()}" if staff_type == "도서부원" else f"사서교사 {staff_name.strip()}"
                     st.session_state.user_role = 'staff'
+                    persist_login('staff', st.session_state.staff_info)
                     db_add_log("시스템 접속", f"{st.session_state.staff_info} 접속함", st.session_state.staff_info)
                     st.rerun()
         with c2:
             if st.button("메인으로", key="login_home"):
-                st.session_state.user_role = None; st.rerun()
+                st.session_state.user_role = None; clear_persisted_login(); st.rerun()
 
 # ------------------------------------------------------------
 # Participant registration
@@ -344,7 +369,7 @@ elif st.session_state.user_role == 'participant':
     with top1: st.markdown('<div class="eyebrow">EVENT CHECK-IN</div><div class="section-title">도서관 행사 참여 등록</div>', unsafe_allow_html=True)
     with top2:
         if st.button("메인으로", key="participant_home"):
-            st.session_state.user_role = None; st.rerun()
+            st.session_state.user_role = None; clear_persisted_login(); st.rerun()
     _, formcol, _ = st.columns([0.7, 2.2, 0.7])
     with formcol:
         st.markdown('<div class="glass-card"><b>참여 정보를 입력해 주세요</b><p class="muted">행사를 선택하고 학번을 입력하면 등록됩니다. 이름은 자동으로 채워지며, 모르는 경우 학번만으로도 등록할 수 있어요.</p></div>', unsafe_allow_html=True)
@@ -352,38 +377,40 @@ elif st.session_state.user_role == 'participant':
         selected = st.selectbox("참여할 행사", event_options(df_events), key="participant_event")
         sid = st.text_input("학번 (5자리)", placeholder="예: 10101", max_chars=5, key="participant_sid", on_change=fill_participant_name, help="학번을 입력하면 기존 등록 정보가 있을 때 이름이 자동으로 채워집니다.")
         pname = st.text_input("이름", placeholder="학번과 이름을 확인해 주세요", key="participant_name")
-        st.markdown('<p class="muted" style="margin:4px 0 8px">모바일·태블릿에서는 아래 숫자판으로 학번을 입력할 수 있어요.</p>', unsafe_allow_html=True)
-        with st.container(key="mobile_keypad"):
-            keypad_rows = [
-                [("1", "1"), ("2", "2"), ("3", "3")],
-                [("4", "4"), ("5", "5"), ("6", "6")],
-                [("7", "7"), ("8", "8"), ("9", "9")],
-                [("지우기", "clear"), ("0", "0"), ("⌫", "backspace")],
-            ]
-            for row_index, keypad_row in enumerate(keypad_rows):
-                key_cols = st.columns(3, gap="small")
-                for col_index, (label, value) in enumerate(keypad_row):
-                    with key_cols[col_index]:
-                        if value == "clear":
-                            st.button(label, key=f"participant_key_clear_{row_index}_{col_index}", on_click=keypad_clear, use_container_width=True)
-                        elif value == "backspace":
-                            st.button(label, key=f"participant_key_back_{row_index}_{col_index}", on_click=keypad_backspace, use_container_width=True)
-                        else:
-                            st.button(label, key=f"participant_key_{value}", on_click=keypad_add_digit, args=(value,), use_container_width=True)
-        if st.button("참여 등록하기", key="participant_submit"):
+        participant_day = now_seoul().date()
+        pending_participant = (clean_event(selected), sid.strip(), participant_day.isoformat())
+        is_pending_participant = st.session_state.get("pending_participant_duplicate") == pending_participant
+        submit_participant = st.button("참여 등록하기", key="participant_submit")
+        confirm_participant = False
+        cancel_participant = False
+        if is_pending_participant:
+            st.warning("⚠️ 오늘 이 행사에 이미 등록한 기록이 있습니다. 중복 등록하시겠습니까?")
+            confirm_col, cancel_col = st.columns(2)
+            with confirm_col:
+                confirm_participant = st.button("네, 중복 등록", key="participant_confirm_duplicate", use_container_width=True)
+            with cancel_col:
+                cancel_participant = st.button("아니요, 취소", key="participant_cancel_duplicate", use_container_width=True)
+        if cancel_participant:
+            st.session_state.pop("pending_participant_duplicate", None)
+            st.info("중복 등록을 취소했습니다.")
+            st.rerun()
+        if submit_participant or confirm_participant:
             valid, grade, class_num, number = parse_student_id(sid)
             if "행사 없음" in selected: st.error("등록 가능한 행사가 없습니다.")
             elif "[마감]" in selected: st.error("마감된 행사입니다. 도서부원에게 문의해 주세요.")
             elif not valid: st.error("올바른 5자리 학번을 입력해 주세요.")
             else:
                 event = clean_event(selected)
-                if db_participant_exists(event, sid.strip()):
-                    st.warning("이 학생은 이미 해당 행사에 등록되어 있습니다. 중복 등록은 저장하지 않았습니다.")
+                today_count = db_count_participant_on_date(event, sid.strip(), participant_day)
+                if today_count > 0 and not confirm_participant:
+                    st.session_state["pending_participant_duplicate"] = (event, sid.strip(), participant_day.isoformat())
+                    st.rerun()
                 else:
-                    # 이름을 입력하지 않아도 등록 가능. 기존 기록에 이름이 있으면 자동 활용.
+                    # 이름을 입력하지 않아도 등록 가능. 중복 참여는 확인 후 허용.
                     registered_name = pname.strip() or find_student_name(sid.strip()) or "이름 미입력"
                     db_add_participant({"event_name":event,"student_id":sid.strip(),"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
                     db_add_log("참여자 등록", f"[{event}] {sid} {registered_name} 등록 완료", "참여자 본인")
+                    st.session_state.pop("pending_participant_duplicate", None)
                     st.session_state["participant_sid"] = ""
                     st.session_state["participant_name"] = ""
                     note = "" if registered_name != "이름 미입력" else " 이름은 관리자 화면에서 나중에 수정할 수 있어요."
@@ -401,7 +428,7 @@ elif st.session_state.user_role == 'staff':
         st.markdown(f'<div class="eyebrow">ADMIN WORKSPACE</div><div class="section-title">행사 관리 시스템</div><p class="muted">접속 계정: {st.session_state.staff_info}</p>', unsafe_allow_html=True)
     with h2:
         if st.button("로그아웃"):
-            st.session_state.user_role = None; st.session_state.staff_info = None; st.rerun()
+            st.session_state.user_role = None; st.session_state.staff_info = None; clear_persisted_login(); st.rerun()
     # 관리자 첫 화면에서 핵심 현황을 바로 확인
     overview_p = db_get_participants()
     overview_e = db_get_events()
@@ -441,18 +468,38 @@ elif st.session_state.user_role == 'staff':
             with st.expander("일시 수동 지정 (소급 등록)"):
                 cdate = st.date_input("날짜", value=now_seoul().date(), key="retro_date")
                 ctime = st.time_input("시간", value=now_seoul().time().replace(tzinfo=None, microsecond=0), key="retro_time")
-            if st.button("출석 등록 완료"):
+            admin_day = cdate
+            pending_admin = (clean_event(selected), search_id.strip(), admin_day.isoformat())
+            is_pending_admin = st.session_state.get("pending_admin_duplicate") == pending_admin
+            submit_admin = st.button("출석 등록 완료", key="staff_attendance_submit")
+            confirm_admin = False
+            cancel_admin = False
+            if is_pending_admin:
+                st.warning("⚠️ 선택한 날짜에 해당 학생의 행사 참여 기록이 이미 있습니다. 중복 등록하시겠습니까?")
+                confirm_col, cancel_col = st.columns(2)
+                with confirm_col:
+                    confirm_admin = st.button("네, 중복 등록", key="staff_attendance_confirm_duplicate", use_container_width=True)
+                with cancel_col:
+                    cancel_admin = st.button("아니요, 취소", key="staff_attendance_cancel_duplicate", use_container_width=True)
+            if cancel_admin:
+                st.session_state.pop("pending_admin_duplicate", None)
+                st.info("중복 등록을 취소했습니다.")
+                st.rerun()
+            if submit_admin or confirm_admin:
                 if "행사 없음" in selected: st.error("행사를 선택해 주세요.")
                 elif not valid: st.error("올바른 5자리 학번을 입력해 주세요.")
                 elif "[마감]" in selected: st.error("마감된 행사입니다. 행사 상태를 확인해 주세요.")
                 else:
                     event = clean_event(selected)
-                    if db_participant_exists(event, search_id.strip()):
-                        st.warning("이 학생은 이미 해당 행사에 등록되어 있습니다. 중복 출석 등록은 저장하지 않았습니다.")
+                    same_day_count = db_count_participant_on_date(event, search_id.strip(), admin_day)
+                    if same_day_count > 0 and not confirm_admin:
+                        st.session_state["pending_admin_duplicate"] = (event, search_id.strip(), admin_day.isoformat())
+                        st.rerun()
                     else:
                         registered_name = search_name.strip() or find_student_name(search_id.strip()) or "이름 미입력"
                         db_add_participant({"event_name":event,"student_id":search_id.strip(),"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
                         db_add_log("참여자 등록", f"[{event}] {search_id} {registered_name} 등록 완료", st.session_state.staff_info)
+                        st.session_state.pop("pending_admin_duplicate", None)
                         st.success(f"학번 {search_id} 출석 등록 완료!"); st.rerun()
         st.divider()
         st.markdown('<h3>참여 기록 관리</h3><p class="muted">오늘 기록뿐 아니라 과거 기록도 검색해 여러 건을 한 번에 삭제할 수 있습니다.</p>', unsafe_allow_html=True)
@@ -545,6 +592,25 @@ elif st.session_state.user_role == 'staff':
                     name_col, status_col, action_col, delete_col = st.columns([3, 1.2, 1.2, 1.1])
                     name_col.markdown(f"**{ev['name']}**")
                     name_col.caption(f"{ev.get('event_type', '기타')} · {ev.get('description', '')}")
+                    with st.expander("행사 정보 수정", expanded=st.session_state.get(f"edit_event_open_{ev['id']}", False)):
+                        event_types = ["독서·독서토론", "도서관 이용 교육", "독서 문화 행사", "전시·캠페인", "대회·공모전", "기타"]
+                        current_type = str(ev.get("event_type", "기타"))
+                        if current_type not in event_types:
+                            event_types.append(current_type)
+                        with st.form(key=f"edit_event_form_{ev['id']}"):
+                            edited_name = st.text_input("행사명", value=str(ev["name"]), key=f"edit_event_name_{ev['id']}")
+                            edited_type = st.selectbox("행사 종류", event_types, index=event_types.index(current_type), key=f"edit_event_type_{ev['id']}")
+                            edited_description = st.text_area("행사 설명", value=str(ev.get("description", "") or ""), height=100, key=f"edit_event_description_{ev['id']}")
+                            save_event = st.form_submit_button("수정 내용 저장")
+                        if save_event:
+                            if not edited_name.strip():
+                                st.warning("행사명을 입력해 주세요.")
+                            else:
+                                old_name = str(ev["name"])
+                                db_update_event_details(int(ev["id"]), old_name, edited_name.strip(), edited_type, edited_description.strip())
+                                db_add_log("행사 정보 수정", f"행사 [{old_name}] 정보 수정" + (f" → [{edited_name.strip()}]" if old_name != edited_name.strip() else ""), st.session_state.staff_info)
+                                st.success("행사 정보가 수정되었습니다.")
+                                st.rerun()
                     status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔒 마감")
                     label = "마감하기" if ev['status'] == "진행 중" else "재개하기"
                     if action_col.button(label, key=f"toggle_{ev['id']}"):
