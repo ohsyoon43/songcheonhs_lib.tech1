@@ -380,6 +380,10 @@ elif st.session_state.user_role == 'staff_login':
 # Participant registration
 # ------------------------------------------------------------
 elif st.session_state.user_role == 'participant':
+    # 입력 위젯이 생성되기 전에만 키 값을 초기화해 WidgetAlreadyInstantiated 오류 방지
+    if st.session_state.pop('clear_participant_inputs', False):
+        st.session_state['participant_sid'] = ''
+        st.session_state['participant_name'] = ''
     top1, top2 = st.columns([5, 1])
     with top1: st.markdown('<div class="eyebrow">EVENT CHECK-IN</div><div class="section-title">도서관 행사 참여 등록</div>', unsafe_allow_html=True)
     with top2:
@@ -426,8 +430,7 @@ elif st.session_state.user_role == 'participant':
                     db_add_participant({"event_name":event,"student_id":sid.strip(),"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
                     db_add_log("참여자 등록", f"[{event}] {sid} {registered_name} 등록 완료", "참여자 본인")
                     st.session_state.pop("pending_participant_duplicate", None)
-                    st.session_state["participant_sid"] = ""
-                    st.session_state["participant_name"] = ""
+                    st.session_state['clear_participant_inputs'] = True
                     note = "" if registered_name != "이름 미입력" else " 이름은 관리자 화면에서 나중에 수정할 수 있어요."
                     st.session_state["participant_registration_flash"] = f"학번 {sid} 등록이 완료되었습니다!{note}"
                     st.rerun()
