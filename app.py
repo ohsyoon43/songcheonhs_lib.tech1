@@ -347,6 +347,10 @@ def fill_staff_student_name():
     if matched_name:
         st.session_state["staff_search_name"] = matched_name
 
+def request_staff_search():
+    """Enter in either search field requests the same validation as Search."""
+    st.session_state["staff_search_requested"] = True
+
 def event_options(df):
     return [f"[{r['status']}] {r['name']}" for _, r in df.iterrows()] if not df.empty else ["등록된 행사 없음"]
 def clean_event(value):
@@ -548,17 +552,36 @@ elif st.session_state.user_role == 'staff':
                 max_chars=5, on_change=fill_staff_student_name,
                 help="학번 5자리를 입력하면 기존 기록의 이름을 자동으로 불러옵니다."
             )
-            search_name = st.text_input("이름", key="staff_search_name", placeholder="학생 이름 입력")
+            search_name = st.text_input("이름", key="staff_search_name", placeholder="학생 이름 입력", on_change=request_staff_search)
             search_col, clear_col = st.columns([1.2, 1], gap="small")
             with search_col:
-                search_clicked = st.button("🔎 검색", key="staff_student_search", use_container_width=True, type="primary")
+                search_clicked = st.button("검색", key="staff_student_search", use_container_width=True, type="primary")
             with clear_col:
-                clear_clicked = st.button("초기화", key="staff_student_clear", use_container_width=True)
+                clear_clicked = st.button("초기화 (Esc)", key="staff_student_clear", use_container_width=True)
 
+            # ESC 키는 브라우저 문서에서 초기화 버튼을 눌러 같은 초기화 경로를 실행한다.
+            st.components.v1.html("""<script>
+            (function(){
+              try {
+                const doc = window.parent.document;
+                if (doc.__songcheonEscClearBound) return;
+                doc.__songcheonEscClearBound = true;
+                doc.addEventListener('keydown', function(e) {
+                  if (e.key !== 'Escape') return;
+                  const buttons = Array.from(doc.querySelectorAll('button'));
+                  const clear = buttons.find(b => (b.innerText || '').trim().includes('초기화 (Esc)'));
+                  if (clear) { e.preventDefault(); clear.click(); }
+                }, true);
+              } catch(e) {}
+            })();
+            </script>""", height=0)
+
+            search_clicked = search_clicked or st.session_state.pop("staff_search_requested", False)
             if clear_clicked:
                 st.session_state["staff_selected_student"] = None
                 st.session_state["clear_staff_search_inputs"] = True
                 st.session_state.pop("pending_admin_duplicate", None)
+                st.session_state.pop("staff_search_requested", None)
                 st.rerun()
 
             if search_clicked:
@@ -577,22 +600,19 @@ elif st.session_state.user_role == 'staff':
                     st.rerun()
 
             selected_student = st.session_state.get("staff_selected_student")
-            st.markdown('<div class="glass-card"><b>참여자 정보</b></div>', unsafe_allow_html=True)
+            st.markdown('<h4 style="margin:.8rem 0 .55rem 0">참여자 정보</h4>', unsafe_allow_html=True)
             if selected_student:
                 sid_show = selected_student["student_id"]
                 name_show = selected_student["name"]
-                grade_show = selected_student["grade"]
-                class_show = selected_student["class"]
-                number_show = selected_student["number"]
                 st.markdown(
-                    f'<div class="glass-card"><div class="muted">학번</div><div style="font-size:1.15rem;font-weight:750">{sid_show}</div><div class="muted" style="margin-top:.45rem">이름</div><div style="font-size:1.15rem;font-weight:750">{name_show}</div><div class="muted" style="margin-top:.45rem">학년 · 반 · 번호</div><div style="font-weight:650">{grade_show}학년 {class_show}반 {number_show}번</div></div>',
+                    f'<div class="glass-card" style="min-height:190px"><div class="muted">학번</div><div style="font-size:1.2rem;font-weight:800">{sid_show}</div><div class="muted" style="margin-top:.65rem">이름</div><div style="font-size:1.2rem;font-weight:800">{name_show}</div></div>',
                     unsafe_allow_html=True
                 )
             else:
-                st.caption("학번과 이름을 입력한 뒤 검색하면 참여자 정보가 여기에 표시됩니다.")
+                st.markdown('<div class="glass-card" style="min-height:190px;display:flex;align-items:center"><span class="muted">학번과 이름을 입력한 뒤 검색하면 참여자 정보가 여기에 표시됩니다.</span></div>', unsafe_allow_html=True)
 
         with right:
-            st.markdown('<div class="eyebrow">PARTICIPATION</div><h3>행사 등록 및 상세 이력</h3>', unsafe_allow_html=True)
+            st.markdown('<div class="eyebrow">PARTICIPATION</div><h3>행사 등록 및 참여 이력</h3>', unsafe_allow_html=True)
             event_col, date_col, register_col = st.columns([1.5, 1.05, .8], gap="small", vertical_alignment="bottom")
             with event_col:
                 selected = st.selectbox("행사 입력", event_options(df_e), key="staff_event")
@@ -654,7 +674,7 @@ elif st.session_state.user_role == 'staff':
                             st.session_state["staff_registration_flash"] = f"{selected_name} 학생의 {event} 참여 등록이 완료되었습니다."
                             st.rerun()
             else:
-                st.markdown('<div class="glass-card"><b>행사 참여 상세 이력</b><p class="muted">왼쪽에서 학번과 이름을 검색하면 이 영역에 참여 이력이 표시됩니다.</p></div>', unsafe_allow_html=True)
+                st.markdown('<h4 style="margin:.8rem 0 .55rem 0">행사 참여 이력</h4><div class="glass-card" style="min-height:250px"><p class="muted">왼쪽에서 학번과 이름을 검색하면 이 영역에 참여 이력이 표시됩니다.</p></div>', unsafe_allow_html=True)
                 if register_clicked:
                     st.warning("먼저 왼쪽에서 학번과 이름을 검색해 참여자를 선택해 주세요.")
 
