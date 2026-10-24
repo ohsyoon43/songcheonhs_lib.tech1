@@ -531,33 +531,51 @@ elif st.session_state.user_role == 'staff':
 
     with tab1:
         df_p = db_get_participants(); df_e = db_get_events()
-        left, right = st.columns([1, 1.7], gap="large")
+
+        # 검색 결과는 검색 버튼을 눌렀을 때 고정해 우측 이력 영역에 표시
+        if "staff_history_search" not in st.session_state:
+            st.session_state.staff_history_search = None
+
+        def reset_staff_student_search():
+            st.session_state["staff_search_id"] = ""
+            st.session_state["staff_search_name"] = ""
+            st.session_state["staff_history_search"] = None
+            st.session_state.pop("pending_admin_duplicate", None)
+
+        left, right = st.columns([0.82, 2.18], gap="large")
         with left:
-            st.markdown('<div class="eyebrow">STUDENT LOOKUP</div><h3>학생 검색</h3><p class="muted">학번과 이름으로 과거 참여 이력을 확인합니다.</p>', unsafe_allow_html=True)
-            search_id = st.text_input("학번 (5자리)", key="staff_search_id", placeholder="예: 10101", max_chars=5, on_change=fill_staff_student_name)
-            search_name = st.text_input("이름", key="staff_search_name", placeholder="학생 이름")
-            valid, grade, class_num, number = parse_student_id(search_id)
-            if search_id.strip() or search_name.strip():
+            st.markdown('<div class="eyebrow">STUDENT LOOKUP</div><h3>참여자 정보</h3><p class="muted">학번과 이름으로 학생을 검색합니다.</p>', unsafe_allow_html=True)
+            search_id = st.text_input("학번 입력 (5자리)", key="staff_search_id", placeholder="예: 10101", max_chars=5, on_change=fill_staff_student_name)
+            search_name = st.text_input("이름 입력", key="staff_search_name", placeholder="학생 이름")
+            search_btn_col, reset_btn_col = st.columns(2, gap="small")
+            with search_btn_col:
+                search_clicked = st.button("학생 검색", key="staff_student_search_button", use_container_width=True)
+            with reset_btn_col:
+                st.button("초기화", key="staff_student_reset_button", use_container_width=True, on_click=reset_staff_student_search)
+            if search_clicked:
                 if not search_id.strip() or not search_name.strip():
-                    st.caption("학번과 이름을 모두 입력해야 참여 이력을 확인할 수 있습니다.")
-                elif not df_p.empty:
-                    history = df_p[(df_p['student_id'].astype(str).str.strip() == search_id.strip()) & (df_p['name'].astype(str).str.strip() == search_name.strip())]
-                    if not history.empty:
-                        st.success(f"학번과 이름이 모두 일치합니다 · 참여 이력 {len(history)}건")
-                        for _, row in history.iterrows(): st.markdown(f"- **{row['event_name']}** · {row['timestamp']}")
-                    else: st.info("학번과 이름이 모두 일치하는 참여 이력이 없습니다.")
+                    st.warning("학번과 이름을 모두 입력해 주세요.")
+                    st.session_state.staff_history_search = None
                 else:
-                    st.info("과거 참여 이력이 없습니다.")
+                    st.session_state.staff_history_search = (search_id.strip(), search_name.strip())
+
         with right:
-            st.markdown('<div class="eyebrow">PARTICIPATION</div><h3>행사 참여 확인 및 등록</h3><p class="muted">행사를 선택하고 학생 정보를 확인한 뒤 등록합니다.</p>', unsafe_allow_html=True)
-            selected = st.selectbox("등록할 행사", event_options(df_e), key="staff_event")
-            with st.expander("일시 수동 지정 (소급 등록)"):
-                cdate = st.date_input("날짜", value=now_seoul().date(), key="retro_date")
-                ctime = st.time_input("시간", value=now_seoul().time().replace(tzinfo=None, microsecond=0), key="retro_time")
+            st.markdown('<div class="eyebrow">PARTICIPATION</div><h3>행사 참여 등록</h3>', unsafe_allow_html=True)
+            # 한 행에 행사, 수동 지정 일시, 등록 버튼을 배치한다.
+            with st.form("staff_participation_registration_form", clear_on_submit=False):
+                event_col, date_col, time_col, submit_col = st.columns([1.45, 1.0, 0.9, 0.85], gap="small", vertical_alignment="bottom")
+                with event_col:
+                    selected = st.selectbox("행사 입력", event_options(df_e), key="staff_event")
+                with date_col:
+                    cdate = st.date_input("등록 날짜", value=now_seoul().date(), key="retro_date")
+                with time_col:
+                    ctime = st.time_input("등록 시간", value=now_seoul().time().replace(tzinfo=None, microsecond=0), key="retro_time")
+                with submit_col:
+                    submit_admin = st.form_submit_button("참여 등록 완료", use_container_width=True)
+
             admin_day = cdate
             pending_admin = (clean_event(selected), search_id.strip(), admin_day.isoformat())
             is_pending_admin = st.session_state.get("pending_admin_duplicate") == pending_admin
-            submit_admin = st.button("참여 등록 완료", key="staff_attendance_submit")
             confirm_admin = False
             cancel_admin = False
             if is_pending_admin:
@@ -572,8 +590,10 @@ elif st.session_state.user_role == 'staff':
                 st.info("중복 등록을 취소했습니다.")
                 st.rerun()
             if submit_admin or confirm_admin:
+                valid, grade, class_num, number = parse_student_id(search_id)
                 if "행사 없음" in selected: st.error("행사를 선택해 주세요.")
-                elif not valid: st.error("올바른 5자리 학번을 입력해 주세요.")
+                elif not valid: st.error("왼쪽에서 올바른 5자리 학번을 입력해 주세요.")
+                elif not search_name.strip() and not find_student_name(search_id.strip()): st.error("왼쪽에서 학생을 검색하고 이름을 입력해 주세요.")
                 elif "[마감]" in selected: st.error("마감된 행사입니다. 행사 상태를 확인해 주세요.")
                 else:
                     event = clean_event(selected)
@@ -586,7 +606,21 @@ elif st.session_state.user_role == 'staff':
                         db_add_participant({"event_name":event,"student_id":search_id.strip(),"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
                         db_add_log("참여자 등록", f"[{event}] {search_id} {registered_name} 등록 완료", st.session_state.staff_info)
                         st.session_state.pop("pending_admin_duplicate", None)
-                        st.success(f"학번 {search_id} 참여 등록 완료!"); st.rerun()
+                        st.success(f"학번 {search_id} 참여 등록 완료!")
+                        st.rerun()
+
+            st.markdown('<h3>행사 참여 이력</h3><p class="muted">왼쪽에서 학생을 검색하면 해당 학생의 과거 참여 이력이 표시됩니다.</p>', unsafe_allow_html=True)
+            history_search = st.session_state.get("staff_history_search")
+            if history_search:
+                history_id, history_name = history_search
+                history = df_p[(df_p["student_id"].astype(str).str.strip() == history_id) & (df_p["name"].astype(str).str.strip() == history_name)] if not df_p.empty else pd.DataFrame()
+                if not history.empty:
+                    st.success(f"학번과 이름이 모두 일치합니다 · 참여 이력 {len(history)}건")
+                    st.dataframe(history[["event_name", "timestamp", "operator"]].rename(columns={"event_name":"행사명", "timestamp":"참여 일시", "operator":"등록자"}), use_container_width=True, hide_index=True)
+                else:
+                    st.info("일치하는 참여 이력이 없습니다.")
+            else:
+                st.info("학생 검색 후 이력을 확인할 수 있습니다.")
         st.divider()
         st.markdown('<h3>참여 기록 관리</h3><p class="muted">오늘 기록뿐 아니라 과거 기록도 검색해 여러 건을 한 번에 삭제할 수 있습니다.</p>', unsafe_allow_html=True)
         all_records = db_get_participants()
