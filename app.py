@@ -421,9 +421,20 @@ def desktop_quick_sid_changed():
 def desktop_quick_name_entered():
     st.session_state["desktop_quick_submit_pending"] = True
 
+def sanitize_student_id(key):
+    """Keep student ID inputs to at most five ASCII digits."""
+    raw = str(st.session_state.get(key, "") or "")
+    st.session_state[key] = "".join(ch for ch in raw if ch in "0123456789")[:5]
+
+def sanitize_staff_login_id():
+    sanitize_student_id("staff_login_student_id")
+
+def sanitize_quick_sid():
+    sanitize_student_id("quick_sid_numeric")
+
 def fill_staff_student_name():
-    raw_sid = st.session_state.get("staff_search_id_numeric")
-    sid = f"{int(raw_sid):05d}" if raw_sid is not None else ""
+    sanitize_student_id("staff_search_id_numeric")
+    sid = st.session_state.get("staff_search_id_numeric", "")
     matched_name = find_student_name(sid) if len(sid) == 5 and sid.isdigit() else ""
     if matched_name:
         st.session_state["staff_search_name"] = matched_name
@@ -504,8 +515,8 @@ elif st.session_state.user_role == 'staff_login':
         st.markdown('<div class="eyebrow">STAFF LOGIN</div><div class="section-title">관리자 로그인</div><p class="muted">담당자 정보를 입력해 로그인해 주세요.</p>', unsafe_allow_html=True)
         staff_type = st.selectbox("직위 구분", ["도서부원", "사서교사"])
         if staff_type == "도서부원":
-            staff_std_id_value = st.number_input("학번 (5자리)", min_value=0, max_value=99999, value=None, step=1, format="%05d", key="staff_login_student_id", placeholder="예: 10101")
-            staff_std_id = f"{int(staff_std_id_value):05d}" if staff_std_id_value is not None else ""
+            staff_std_id = st.text_input("학번 (5자리)", max_chars=5, key="staff_login_student_id", placeholder="예: 10101", on_change=sanitize_staff_login_id)
+            staff_std_id = str(staff_std_id or "")
             staff_name = st.text_input("이름", placeholder="이름을 입력하세요")
         else:
             staff_std_id = "교직원"
@@ -541,14 +552,13 @@ elif st.session_state.user_role == 'participant':
 
     df_events = db_get_events()
     selected = st.selectbox("참여할 행사", event_options(df_events), key="participant_event")
-    st.session_state.setdefault("quick_sid_numeric", None)
+    st.session_state.setdefault("quick_sid_numeric", "")
     st.session_state.setdefault("quick_name_input", "")
 
     # Handle registration and duplicate-confirm actions before creating input widgets,
     # so successful registration can safely clear their session-state values.
     if st.session_state.pop("quick_registration_submit_pending", False):
-        raw_sid = st.session_state.get("quick_sid_numeric")
-        sid = f"{int(raw_sid):05d}" if raw_sid is not None else ""
+        sid = str(st.session_state.get("quick_sid_numeric", "") or "")
         name = str(st.session_state.get("quick_name_input", "")).strip() or "-"
         valid, grade, class_num, number = parse_student_id(sid)
         if "행사 없음" in selected:
@@ -566,7 +576,7 @@ elif st.session_state.user_role == 'participant':
                 db_add_participant({"event_name":event,"student_id":sid,"grade":grade,"class":class_num,"number":number,"name":name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
                 db_add_log("참여자 등록", f"[{event}] {sid} {name} 등록 완료", "참여자 본인")
                 st.session_state["participant_registration_flash"] = f"학번 {sid} 등록이 완료되었습니다!"
-                st.session_state["quick_sid_numeric"] = None
+                st.session_state["quick_sid_numeric"] = ""
                 st.session_state["quick_name_input"] = ""
 
     if st.session_state.pop("quick_duplicate_confirm_pending", False):
@@ -579,7 +589,7 @@ elif st.session_state.user_role == 'participant':
             db_add_log("참여자 등록", f"[{event}] {pending_sid} {registered_name} 중복 등록 완료", "참여자 본인")
             st.session_state.pop("pending_participant_duplicate", None)
             st.session_state["participant_registration_flash"] = f"학번 {pending_sid} 등록이 완료되었습니다!"
-            st.session_state["quick_sid_numeric"] = None
+            st.session_state["quick_sid_numeric"] = ""
             st.session_state["quick_name_input"] = ""
 
     if st.session_state.pop("quick_duplicate_cancel_pending", False):
@@ -587,7 +597,7 @@ elif st.session_state.user_role == 'participant':
 
     st.markdown('<div class="glass-card"><b>참여자 정보</b></div>', unsafe_allow_html=True)
     with st.form("participant_quick_registration_form", clear_on_submit=False):
-        st.number_input("학번 (5자리)", min_value=0, max_value=99999, value=None, step=1, format="%05d", placeholder="예: 10101", key="quick_sid_numeric")
+        st.text_input("학번 (5자리)", max_chars=5, placeholder="예: 10101", key="quick_sid_numeric", on_change=sanitize_quick_sid)
         st.text_input("이름 (선택)", placeholder="이름을 입력하세요. 비워 두면 - 로 등록됩니다.", key="quick_name_input")
         submitted = st.form_submit_button("등록", type="primary", use_container_width=True)
     if submitted:
@@ -638,7 +648,7 @@ elif st.session_state.user_role == 'staff':
     with tab1:
         # 검색 성공 후에는 다음 실행에서 위젯이 생성되기 전에 입력값을 비운다.
         if st.session_state.pop("clear_staff_search_inputs", False):
-            st.session_state["staff_search_id_numeric"] = None
+            st.session_state["staff_search_id_numeric"] = ""
             st.session_state["staff_search_name"] = ""
 
         df_p = db_get_participants(); df_e = db_get_events()
@@ -648,7 +658,7 @@ elif st.session_state.user_role == 'staff':
             st.session_state.staff_history_search = None
 
         def reset_staff_student_search():
-            st.session_state["staff_search_id_numeric"] = None
+            st.session_state["staff_search_id_numeric"] = ""
             st.session_state["staff_search_name"] = ""
             st.session_state["staff_history_search"] = None
             st.session_state.pop("pending_admin_duplicate", None)
@@ -659,8 +669,7 @@ elif st.session_state.user_role == 'staff':
             saved_student = st.session_state.get("staff_history_search")
             if saved_student:
                 st.markdown(f'<div class="glass-card"><b>학번</b>　{saved_student[0]}<br><b>이름</b>　{saved_student[1]}</div>', unsafe_allow_html=True)
-            search_id_value = st.number_input("학번 입력 (5자리)", min_value=0, max_value=99999, value=None, step=1, format="%05d", key="staff_search_id_numeric", placeholder="예: 10101", on_change=fill_staff_student_name)
-            search_id = f"{int(search_id_value):05d}" if search_id_value is not None else ""
+            search_id = st.text_input("학번 입력 (5자리)", max_chars=5, key="staff_search_id_numeric", placeholder="예: 10101", on_change=fill_staff_student_name)
             search_name = st.text_input("이름 입력", key="staff_search_name", placeholder="학생 이름")
             search_btn_col, reset_btn_col = st.columns(2, gap="small")
             with search_btn_col:
