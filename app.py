@@ -289,35 +289,6 @@ img, video, iframe { max-width:100%; }
   [data-testid="stTabs"] [data-baseweb="tab-list"] { overflow-x:auto !important; flex-wrap:nowrap !important; scrollbar-width:thin; }
   [data-testid="stTabs"] button[role="tab"] { flex:0 0 auto; white-space:nowrap; }
 }
-
-/* Apple-inspired visual layer: restrained SF typography, neutral surfaces, crisp controls */
-:root { --ink:#1d1d1f; --muted:#6e6e73; --blue:#0071e3; --blue2:#0066cc; --line:#d2d2d7; }
-html, body, [class*="css"], [data-testid="stAppViewContainer"] { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Pretendard,sans-serif !important; }
-.stApp { color:#1d1d1f !important; background:#f5f5f7 !important; }
-[data-testid="stHeader"] { background:rgba(245,245,247,.82) !important; backdrop-filter:saturate(180%) blur(20px); }
-.brandbar { border:1px solid rgba(0,0,0,.04) !important; border-radius:20px !important; background:rgba(255,255,255,.86) !important; backdrop-filter:saturate(180%) blur(20px); box-shadow:0 2px 10px rgba(0,0,0,.035) !important; }
-.brandname,.hero-title,.section-title,h1,h2,h3,h4 { color:#1d1d1f !important; letter-spacing:-.55px !important; }
-.brandname { font-weight:750 !important; }
-.branddesc,.hero-subtitle,.muted { color:#6e6e73 !important; }
-.eyebrow { color:#0066cc !important; border-bottom:1px solid #0071e3 !important; letter-spacing:1.4px !important; }
-.hero-card,.glass-card { background:rgba(255,255,255,.96) !important; border:1px solid rgba(0,0,0,.045) !important; border-radius:24px !important; box-shadow:0 3px 14px rgba(0,0,0,.035) !important; backdrop-filter:none !important; }
-.hero-title { font-weight:760 !important; }
-.pill { color:#0066cc !important; background:#f0f7ff !important; border-color:rgba(0,113,227,.13) !important; }
-.stButton > button,.stDownloadButton > button,.stFormSubmitButton > button { background:#0071e3 !important; border:1px solid #0071e3 !important; color:#fff !important; border-radius:12px !important; box-shadow:none !important; font-weight:650 !important; transition:background-color .16s ease,transform .16s ease,box-shadow .16s ease !important; }
-.stButton > button p,.stButton > button span,.stDownloadButton > button p,.stFormSubmitButton > button p,.stFormSubmitButton > button span { color:#fff !important; font-weight:650 !important; }
-.stButton > button:hover,.stDownloadButton > button:hover,.stFormSubmitButton > button:hover { background:#0066cc !important; border-color:#0066cc !important; box-shadow:0 2px 7px rgba(0,113,227,.18) !important; }
-.stButton > button:active,.stDownloadButton > button:active,.stFormSubmitButton > button:active { transform:scale(.99); }
-[data-testid="stTextInput"] input,[data-testid="stNumberInput"] input,[data-testid="stDateInput"] input,[data-testid="stTimeInput"] input,[data-testid="stSelectbox"] [data-baseweb="select"] > div,[data-testid="stMultiSelect"] [data-baseweb="select"] > div { border-radius:12px !important; border-color:#d2d2d7 !important; background:#fff !important; }
-[data-testid="stTextInput"] input:focus,[data-testid="stNumberInput"] input:focus { border-color:#0071e3 !important; box-shadow:0 0 0 3px rgba(0,113,227,.14) !important; }
-label,[data-testid="stWidgetLabel"] p { color:#424245 !important; font-weight:600 !important; }
-[data-testid="stTabs"] [data-baseweb="tab-list"] { gap:5px !important; padding:5px !important; border:1px solid rgba(0,0,0,.04) !important; border-radius:14px !important; background:#e8e8ed !important; }
-[data-testid="stTabs"] button[role="tab"] { border-radius:10px !important; color:#515154 !important; }
-[data-testid="stTabs"] button[role="tab"][aria-selected="true"] { background:#fff !important; color:#1d1d1f !important; box-shadow:0 1px 4px rgba(0,0,0,.08) !important; }
-[data-testid="stDataFrame"],[data-testid="stTable"] { border:1px solid #e5e5ea !important; border-radius:14px !important; overflow:hidden; }
-[data-testid="stExpander"] { border:1px solid #e5e5ea !important; border-radius:14px !important; background:#fff !important; }
-.stMetric { background:#fff !important; border:1px solid rgba(0,0,0,.045) !important; border-radius:18px !important; box-shadow:0 2px 10px rgba(0,0,0,.03) !important; }
-hr { border-color:#e5e5ea !important; }
-@media(max-width:760px){.brandbar{border-radius:16px !important}.hero-card,.glass-card{border-radius:18px !important}}
 </style>''', unsafe_allow_html=True)
 
 # 접근성·기기 호환 설정: Streamlit 위젯 기반 테마 전환
@@ -372,30 +343,7 @@ if st.session_state.dark_mode:
       [data-testid="stTabs"] [data-baseweb="tab-list"] { gap:4px !important; }
       [data-testid="stTabs"] button[role="tab"] { padding:9px 10px !important; }
     }
-    
-/* Apple-inspired dark appearance */
-:root { color-scheme:dark; --ink:#f5f5f7; --muted:#a1a1a6; --line:#424245; }
-html,body,[data-testid="stAppViewContainer"],.stApp { color:#f5f5f7 !important; background:#000 !important; }
-[data-testid="stHeader"] { background:rgba(0,0,0,.78) !important; backdrop-filter:saturate(180%) blur(20px); }
-.brandbar,.hero-card,.glass-card,[data-testid="stExpander"],[data-testid="stTabs"] [data-baseweb="tab-list"] { background:rgba(28,28,30,.97) !important; border-color:rgba(255,255,255,.09) !important; box-shadow:0 2px 12px rgba(0,0,0,.18) !important; }
-.brandname,.hero-title,.section-title,h1,h2,h3,h4,p,li,label,[data-testid="stWidgetLabel"] p,[data-testid="stMarkdownContainer"] { color:#f5f5f7 !important; }
-.branddesc,.hero-subtitle,.muted { color:#a1a1a6 !important; }
-[data-testid="stTextInput"] input,[data-testid="stNumberInput"] input,[data-testid="stDateInput"] input,[data-testid="stTimeInput"] input,[data-testid="stSelectbox"] [data-baseweb="select"] > div,[data-testid="stMultiSelect"] [data-baseweb="select"] > div,[data-testid="stTextArea"] textarea { color:#f5f5f7 !important; background:#1c1c1e !important; border-color:#48484a !important; -webkit-text-fill-color:#f5f5f7 !important; }
-input::placeholder,textarea::placeholder { color:#a1a1a6 !important; -webkit-text-fill-color:#a1a1a6 !important; }
-label,[data-testid="stWidgetLabel"] p { color:#d1d1d6 !important; }
-.pill { color:#64b5ff !important; background:rgba(0,113,227,.16) !important; border-color:rgba(100,181,255,.2) !important; }
-[data-testid="stTabs"] button[role="tab"] { color:#d1d1d6 !important; }
-[data-testid="stTabs"] button[role="tab"][aria-selected="true"] { background:#3a3a3c !important; color:#fff !important; }
-[data-testid="stMetric"] { background:#1c1c1e !important; border-color:#38383a !important; }
-[data-testid="stMetricLabel"],[data-testid="stMetricValue"],[data-testid="stMetricDelta"] { color:#f5f5f7 !important; }
-[data-testid="stDataFrame"],[data-testid="stTable"] { border-color:#38383a !important; }
-[data-testid="stAlert"] p,[data-testid="stExpander"] summary,[data-testid="stExpander"] summary p { color:#f5f5f7 !important; }
-[data-baseweb="popover"] > div,[data-baseweb="menu"] { background:#1c1c1e !important; }
-[role="option"],[role="listbox"] { color:#f5f5f7 !important; }
-hr { border-color:#38383a !important; } a { color:#64b5ff !important; }
-.stButton > button,.stDownloadButton > button,.stFormSubmitButton > button { background:#0071e3 !important; border-color:#0071e3 !important; }
-.stButton > button:hover,.stDownloadButton > button:hover,.stFormSubmitButton > button:hover { background:#2997ff !important; border-color:#2997ff !important; }
-</style>''', unsafe_allow_html=True)
+    </style>''', unsafe_allow_html=True)
 
 st.markdown('''<div class="brandbar"><div class="brandname">Songcheon <span style="color:#3182F6">Lib Tech</span></div><div class="branddesc">인천송천고등학교 · 행사 관리 시스템</div></div>''', unsafe_allow_html=True)
 
@@ -672,7 +620,7 @@ elif st.session_state.user_role == 'staff':
             saved_student = st.session_state.get("staff_history_search")
             if saved_student:
                 st.markdown(f'<div class="glass-card"><b>학번</b>　{saved_student[0]}<br><b>이름</b>　{saved_student[1]}</div>', unsafe_allow_html=True)
-            search_id = st.text_input("학번 입력 (5자리)", key="staff_search_id", placeholder="예: 10101", max_chars=5)
+            search_id = st.text_input("학번 입력 (5자리)", key="staff_search_id", placeholder="예: 10101", max_chars=5, on_change=fill_staff_student_name)
             search_name = st.text_input("이름 입력", key="staff_search_name", placeholder="학생 이름")
             search_btn_col, reset_btn_col = st.columns(2, gap="small")
             with search_btn_col:
@@ -742,7 +690,7 @@ elif st.session_state.user_role == 'staff':
                         st.session_state["pending_admin_duplicate"] = (event, active_search_id, admin_day.isoformat())
                         st.rerun()
                     else:
-                        registered_name = (active_search_name.strip() if active_search_name else "") or "-"
+                        registered_name = str(active_search_name or "").strip() or find_student_name(active_search_id) or "-"
                         db_add_participant({"event_name":event,"student_id":active_search_id,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
                         db_add_log("참여자 등록", f"[{event}] {active_search_id} {registered_name} 등록 완료", st.session_state.staff_info)
                         st.session_state.pop("pending_admin_duplicate", None)
@@ -753,10 +701,9 @@ elif st.session_state.user_role == 'staff':
             history_search = st.session_state.get("staff_history_search")
             if history_search:
                 history_id, history_name = history_search
-                # 이름을 입력하지 않은 경우에도 학번 기준으로 참여 이력을 검색한다.
                 history = df_p[df_p["student_id"].astype(str).str.strip() == history_id] if not df_p.empty else pd.DataFrame()
                 if not history.empty:
-                    st.success(f"학번 {history_id} 기준 참여 이력 {len(history)}건")
+                    st.success(f"학번 {history_id}의 참여 이력 {len(history)}건")
                     st.dataframe(history[["event_name", "timestamp", "operator"]].rename(columns={"event_name":"행사명", "timestamp":"참여 일시", "operator":"등록자"}), use_container_width=True, hide_index=True)
                 else:
                     st.info("일치하는 참여 이력이 없습니다.")
