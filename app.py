@@ -242,10 +242,6 @@ h1,h2,h3,h4 { color:#20232b; letter-spacing:-.65px; }
 [data-testid="stSelectbox"] [data-baseweb="select"] > div { min-height:54px !important; font-size:16px !important; }
 .stMetric { background:rgba(255,255,255,.78); border:1px solid rgba(255,255,255,.95); border-radius:20px; padding:18px 20px; box-shadow:0 10px 26px rgba(51,65,97,.06); }
 @media (max-width: 760px) { .block-container { padding-left:.65rem !important; padding-right:.65rem !important; padding-top:.65rem; } .brandbar { padding:15px 17px; border-radius:20px; align-items:flex-start; flex-direction:column; } .hero-card { padding:28px 19px; } .glass-card { padding:19px; } .section-title { font-size:24px; } [data-testid="stTabs"] [data-baseweb="tab-list"] { flex-wrap:wrap; } [data-testid="stDataFrame"] { max-width:100%; } [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) { display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important; grid-auto-flow:row !important; column-gap:3px !important; row-gap:3px !important; align-items:stretch !important; width:100% !important; max-width:100% !important; margin-left:0 !important; margin-right:0 !important; } [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) > [data-testid="column"] { min-width:0 !important; width:auto !important; max-width:none !important; flex:none !important; padding:0 !important; margin:0 !important; } [data-testid="stMetric"] { box-sizing:border-box !important; min-width:0 !important; width:100% !important; max-width:none !important; aspect-ratio:auto !important; min-height:82px !important; padding:9px 3px !important; margin:0 !important; border-radius:11px !important; box-shadow:0 3px 10px rgba(51,65,97,.05) !important; display:flex !important; flex-direction:column !important; justify-content:center !important; overflow:hidden !important; } [data-testid="stMetricLabel"] { font-size:clamp(9px, 2.9vw, 11px) !important; line-height:1.25 !important; font-weight:650 !important; white-space:nowrap !important; overflow:visible !important; text-overflow:clip !important; word-break:keep-all !important; letter-spacing:-.35px !important; } [data-testid="stMetricValue"] { font-size:clamp(13px, 3.8vw, 16px) !important; line-height:1.25 !important; font-weight:800 !important; white-space:nowrap !important; overflow:visible !important; text-overflow:clip !important; letter-spacing:-.4px !important; } [data-testid="stMetricValue"] > div { font-weight:800 !important; } [data-testid="stMetricDelta"] { font-size:9px !important; } }
-.participant-summary { padding:10px 14px !important; margin:0 0 10px !important; border-radius:14px !important; line-height:1.45; }
-.participant-summary b { font-size:17px; }
-.participant-summary span { font-size:13px; }
-@media (max-width:760px) { .participant-summary { padding:8px 10px !important; } .participant-summary b { font-size:15px; } .participant-summary span { font-size:12px; } }
 @media (hover: none) and (pointer: coarse) { .stButton > button, .stDownloadButton > button { min-height:52px; } [data-testid="stTextInput"] input { min-height:58px !important; font-size:18px !important; } }
 /* Consistent responsive behavior for iOS Safari, Android browsers, and desktop */
 *, *::before, *::after { box-sizing:border-box; }
@@ -534,153 +530,148 @@ elif st.session_state.user_role == 'staff':
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["참여 등록", "행사 관리", "통계 대시보드", "처리 이력", "백업/복원"])
 
     with tab1:
-        # 검색 후 입력창은 비우되, 조회 결과는 별도 세션 상태에 보존한다.
-        if st.session_state.pop("clear_staff_lookup_inputs", False):
+        # 검색 결과는 별도 세션 상태에 보관하고, 검색 입력칸은 검색 후 비운다.
+        if st.session_state.pop("clear_staff_search_inputs", False):
             st.session_state["staff_search_id"] = ""
             st.session_state["staff_search_name"] = ""
-
         df_p = db_get_participants()
         df_e = db_get_events()
-        st.markdown('<div class="eyebrow">STUDENT LOOKUP</div><h3>학생 검색 및 참여 등록</h3><p class="muted">학번과 이름을 검색하면 참여자 정보와 상세 이력을 확인한 뒤 행사를 등록할 수 있습니다.</p>', unsafe_allow_html=True)
+        if "staff_selected_student" not in st.session_state:
+            st.session_state["staff_selected_student"] = None
+        if "staff_search_message" not in st.session_state:
+            st.session_state["staff_search_message"] = ""
 
-        input_col, name_col, search_col = st.columns([1.15, 1.15, 0.65], gap="small", vertical_alignment="bottom")
-        with input_col:
-            search_id = st.text_input("학번 (5자리)", key="staff_search_id", placeholder="예: 10101", max_chars=5, on_change=fill_staff_student_name)
+        st.markdown('<div class="eyebrow">STUDENT LOOKUP</div><h3>참여 등록</h3><p class="muted">학번과 이름을 검색하면 참여자 정보와 상세 이력을 확인할 수 있습니다.</p>', unsafe_allow_html=True)
+
+        # 입력 컨트롤을 한 줄에 정렬해 요청한 화면 배치를 구현
+        sid_col, name_col, search_col, event_col, date_col, register_col = st.columns([1.05, 1.05, 0.72, 1.55, 1.0, 0.85], gap="small")
+        with sid_col:
+            search_id = st.text_input("학번", key="staff_search_id", placeholder="학번 5자리", max_chars=5, on_change=fill_staff_student_name)
         with name_col:
             search_name = st.text_input("이름", key="staff_search_name", placeholder="학생 이름")
         with search_col:
-            do_student_search = st.button("학생 검색", key="staff_student_search_button", use_container_width=True)
+            st.markdown('<div style="height:1.78rem"></div>', unsafe_allow_html=True)
+            search_clicked = st.button("검색", key="staff_student_search_button", use_container_width=True)
+        with event_col:
+            selected_event = st.selectbox("행사", event_options(df_e), key="staff_event")
+        with date_col:
+            admin_day = st.date_input("참여 날짜", value=now_seoul().date(), key="retro_date")
+        with register_col:
+            st.markdown('<div style="height:1.78rem"></div>', unsafe_allow_html=True)
+            register_clicked = st.button("참여 등록", key="staff_attendance_submit", use_container_width=True)
 
-        # 5자리 학번 입력 시 이름 칸으로 이동하고 Esc로 검색 입력을 비우는 편의 기능.
-        import streamlit.components.v1 as components
-        components.html("""<script>
-        (function(){
-          const doc = window.parent.document;
-          const findInput = (label) => {
-            const labels = Array.from(doc.querySelectorAll('label'));
-            const lab = labels.find(el => (el.innerText || '').includes(label));
-            if (!lab) return null;
-            const wrap = lab.closest('[data-testid="stTextInput"]');
-            return wrap ? wrap.querySelector('input') : null;
-          };
-          const sid = findInput('학번 (5자리)');
-          const name = findInput('이름');
-          if (sid && name && !sid.dataset.focusAssistBound) {
-            sid.dataset.focusAssistBound = '1';
-            sid.addEventListener('input', () => {
-              if (sid.value.length === 5 && /^\\d{5}$/.test(sid.value)) name.focus();
-            });
-          }
-          if (!doc.body.dataset.escClearBound) {
-            doc.body.dataset.escClearBound = '1';
-            doc.addEventListener('keydown', (e) => {
-              if (e.key !== 'Escape') return;
-              const active = doc.activeElement;
-              if (!active || ![sid, name].includes(active)) return;
-              e.preventDefault();
-              [sid, name].forEach(el => {
-                if (!el) return;
-                el.value = '';
-                el.dispatchEvent(new Event('input', {bubbles:true}));
-                el.dispatchEvent(new Event('change', {bubbles:true}));
-              });
-              if (sid) sid.focus();
-            });
-          }
-        })();
-        </script>""", height=0, scrolling=False)
+        with st.expander("시간 지정 (선택 사항)"):
+            admin_time = st.time_input("참여 시간", value=now_seoul().time().replace(tzinfo=None, microsecond=0), key="retro_time")
 
-        if do_student_search:
-            clean_sid = search_id.strip()
+        if search_clicked:
+            valid_id, grade, class_num, number = parse_student_id(search_id)
             clean_name = search_name.strip()
-            valid_id, s_grade, s_class, s_number = parse_student_id(clean_sid)
             if not valid_id:
-                st.session_state["staff_lookup_result"] = {"error": "학번은 숫자 5자리로 입력해 주세요."}
+                st.session_state["staff_search_message"] = "학번은 숫자 5자리로 입력해 주세요."
+                st.session_state["staff_selected_student"] = None
             elif not clean_name:
-                st.session_state["staff_lookup_result"] = {"error": "이름을 입력해 주세요."}
+                st.session_state["staff_search_message"] = "이름을 입력해 주세요."
+                st.session_state["staff_selected_student"] = None
             else:
-                matches = df_p[(df_p["student_id"].astype(str).str.strip() == clean_sid) & (df_p["name"].astype(str).str.strip() == clean_name)].copy() if not df_p.empty else pd.DataFrame()
-                st.session_state["staff_lookup_result"] = {
-                    "student_id": clean_sid, "name": clean_name,
-                    "grade": s_grade, "class": s_class, "number": s_number,
-                    "history": matches.to_dict("records") if not matches.empty else [],
-                    "found": not matches.empty,
+                st.session_state["staff_selected_student"] = {
+                    "student_id": search_id.strip(), "name": clean_name,
+                    "grade": grade, "class": class_num, "number": number,
                 }
-            st.session_state["clear_staff_lookup_inputs"] = True
+                st.session_state["staff_search_message"] = ""
+                st.session_state["clear_staff_search_inputs"] = True
             st.rerun()
 
-        lookup = st.session_state.get("staff_lookup_result")
-        if lookup:
-            if lookup.get("error"):
-                st.warning(lookup["error"])
-            else:
-                info_col, history_col = st.columns([0.85, 1.65], gap="small")
-                with info_col:
-                    st.markdown('<div class="eyebrow">PARTICIPANT INFO</div>', unsafe_allow_html=True)
-                    participant_card = (
-                        '<div class="glass-card participant-summary"><b>' + str(lookup["name"]) + '</b><br>'
-                        + '<span>' + str(lookup["student_id"]) + '</span><br>'
-                        + '<span>' + str(lookup["grade"]) + '학년 · ' + str(lookup["class"]) + '반 · ' + str(lookup["number"]) + '번</span></div>'
-                    )
-                    st.markdown(participant_card, unsafe_allow_html=True)
-                with history_col:
-                    st.markdown('<div class="eyebrow">PARTICIPATION HISTORY</div>', unsafe_allow_html=True)
-                    history_rows = lookup.get("history", [])
-                    if history_rows:
-                        st.caption(f"상세 이력 · 총 {len(history_rows)}건")
-                        hist_df = pd.DataFrame(history_rows)
-                        st.dataframe(hist_df[["event_name", "timestamp", "operator"]].rename(columns={"event_name":"행사", "timestamp":"등록 일시", "operator":"등록자"}), use_container_width=True, hide_index=True)
-                    else:
-                        st.info("이 학생의 과거 참여 이력이 없습니다.")
+        if st.session_state.get("staff_search_message"):
+            st.warning(st.session_state["staff_search_message"])
 
-                st.markdown('<div class="eyebrow">NEW PARTICIPATION</div><h4>행사 등록</h4>', unsafe_allow_html=True)
-                event_col, date_col, time_col, register_col = st.columns([1.6, 1, 1, 0.9], gap="small", vertical_alignment="bottom")
-                with event_col:
-                    selected = st.selectbox("등록할 행사", event_options(df_e), key="staff_event")
-                with date_col:
-                    cdate = st.date_input("참여 날짜", value=now_seoul().date(), key="retro_date")
-                with time_col:
-                    ctime = st.time_input("참여 시간", value=now_seoul().time().replace(tzinfo=None, microsecond=0), key="retro_time")
-                with register_col:
-                    submit_admin = st.button("참여 등록", key="staff_attendance_submit", use_container_width=True)
-
-                admin_day = cdate
-                lookup_sid = lookup["student_id"]
-                lookup_name = lookup["name"]
-                pending_admin = (clean_event(selected), lookup_sid, admin_day.isoformat())
-                is_pending_admin = st.session_state.get("pending_admin_duplicate") == pending_admin
-                confirm_admin = False
-                cancel_admin = False
-                if is_pending_admin:
-                    st.warning("⚠️ 선택한 날짜에 해당 학생의 행사 참여 기록이 이미 있습니다. 중복 등록하시겠습니까?")
-                    confirm_col, cancel_col = st.columns(2)
-                    with confirm_col:
-                        confirm_admin = st.button("네, 중복 등록", key="staff_attendance_confirm_duplicate", use_container_width=True)
-                    with cancel_col:
-                        cancel_admin = st.button("아니요, 취소", key="staff_attendance_cancel_duplicate", use_container_width=True)
-                if cancel_admin:
+        selected_student = st.session_state.get("staff_selected_student")
+        info_col, history_col = st.columns([0.85, 1.7], gap="medium")
+        with info_col:
+            st.markdown('<div class="glass-card"><h4>참여자 정보</h4>', unsafe_allow_html=True)
+            if selected_student:
+                st.markdown(f"**학번**　{selected_student['student_id']}  ")
+                st.markdown(f"**이름**　{selected_student['name']}  ")
+                st.markdown(f"**학년·반·번호**　{selected_student['grade']}학년 {selected_student['class']}반 {selected_student['number']}번")
+                st.caption("위 정보로 행사를 등록할 수 있습니다.")
+                if st.button("다른 참여자 검색", key="staff_clear_selected_student", use_container_width=True):
+                    st.session_state["staff_selected_student"] = None
+                    st.session_state["staff_search_message"] = ""
+                    st.session_state["clear_staff_search_inputs"] = True
                     st.session_state.pop("pending_admin_duplicate", None)
                     st.rerun()
-                if submit_admin or confirm_admin:
-                    if "행사 없음" in selected:
-                        st.error("등록된 행사가 없습니다.")
-                    elif "[마감]" in selected:
-                        st.error("마감된 행사입니다. 행사 상태를 확인해 주세요.")
-                    else:
-                        same_day_count = db_count_participant_on_date(clean_event(selected), lookup_sid, admin_day)
-                        if same_day_count > 0 and not confirm_admin:
-                            st.session_state["pending_admin_duplicate"] = (clean_event(selected), lookup_sid, admin_day.isoformat())
-                            st.rerun()
-                        else:
-                            valid_id, s_grade, s_class, s_number = parse_student_id(lookup_sid)
-                            db_add_participant({"event_name":clean_event(selected), "student_id":lookup_sid, "grade":s_grade, "class":s_class, "number":s_number, "name":lookup_name, "timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}", "operator":st.session_state.staff_info})
-                            db_add_log("참여자 등록", f"[{clean_event(selected)}] {lookup_sid} {lookup_name} 등록 완료", st.session_state.staff_info)
-                            st.session_state.pop("pending_admin_duplicate", None)
-                            st.session_state["staff_lookup_result"]["history"].append({"event_name":clean_event(selected), "timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}", "operator":st.session_state.staff_info})
-                            st.toast(f"{lookup_name} 학생의 참여 등록이 완료되었습니다!", icon="✅")
-                            st.rerun()
+            else:
+                st.caption("학번과 이름을 입력한 뒤 검색하면 여기에 표시됩니다.")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with history_col:
+            st.markdown('<div class="glass-card"><h4>행사 참여 상세 이력</h4>', unsafe_allow_html=True)
+            if selected_student:
+                if not df_p.empty:
+                    history = df_p[
+                        (df_p["student_id"].astype(str).str.strip() == selected_student["student_id"])
+                        & (df_p["name"].astype(str).str.strip() == selected_student["name"])
+                    ].sort_values("timestamp", ascending=False)
+                else:
+                    history = pd.DataFrame()
+                if history.empty:
+                    st.info("이 참여자의 과거 행사 참여 이력이 없습니다.")
+                else:
+                    st.caption(f"총 {len(history)}건의 참여 기록")
+                    st.dataframe(
+                        history[["event_name", "timestamp", "operator"]].rename(columns={"event_name":"행사", "timestamp":"참여 일시", "operator":"등록자"}),
+                        use_container_width=True, hide_index=True
+                    )
+            else:
+                st.caption("참여자를 검색하면 상세 이력이 표시됩니다.")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        pending_admin = (clean_event(selected_event), selected_student["student_id"], admin_day.isoformat()) if selected_student else None
+        is_pending_admin = bool(pending_admin and st.session_state.get("pending_admin_duplicate") == pending_admin)
+        if is_pending_admin:
+            st.warning("⚠️ 선택한 날짜에 해당 학생의 행사 참여 기록이 이미 있습니다. 중복 등록하시겠습니까?")
+            confirm_col, cancel_col = st.columns(2)
+            with confirm_col:
+                confirm_admin = st.button("네, 중복 등록", key="staff_attendance_confirm_duplicate", use_container_width=True)
+            with cancel_col:
+                cancel_admin = st.button("아니요, 취소", key="staff_attendance_cancel_duplicate", use_container_width=True)
+            if cancel_admin:
+                st.session_state.pop("pending_admin_duplicate", None)
+                st.rerun()
         else:
-            st.caption("학번 5자리와 이름을 입력하고 **학생 검색**을 눌러 주세요.")
+            confirm_admin = False
+
+        if register_clicked or confirm_admin:
+            if not selected_student:
+                st.error("먼저 학번과 이름을 입력하고 검색해 주세요.")
+            elif "등록된 행사 없음" in selected_event:
+                st.error("등록 가능한 행사가 없습니다.")
+            elif "[마감]" in selected_event:
+                st.error("마감된 행사입니다. 행사 상태를 확인해 주세요.")
+            else:
+                student_id = selected_student["student_id"]
+                student_name = selected_student["name"]
+                event_name = clean_event(selected_event)
+                same_day_count = db_count_participant_on_date(event_name, student_id, admin_day)
+                if same_day_count > 0 and not confirm_admin:
+                    st.session_state["pending_admin_duplicate"] = (event_name, student_id, admin_day.isoformat())
+                    st.rerun()
+                else:
+                    db_add_participant({
+                        "event_name": event_name, "student_id": student_id,
+                        "grade": selected_student["grade"], "class": selected_student["class"],
+                        "number": selected_student["number"], "name": student_name,
+                        "timestamp": f"{admin_day} {admin_time.strftime('%H:%M:%S')}",
+                        "operator": st.session_state.staff_info,
+                    })
+                    db_add_log("참여자 등록", f"[{event_name}] {student_id} {student_name} 등록 완료", st.session_state.staff_info)
+                    st.session_state.pop("pending_admin_duplicate", None)
+                    st.session_state["staff_registration_flash"] = f"{student_name} 학생의 {event_name} 참여 등록이 완료되었습니다."
+                    st.rerun()
+
+        registration_flash = st.session_state.pop("staff_registration_flash", "")
+        if registration_flash:
+            st.toast(registration_flash, icon="✅")
+
         st.divider()
         st.markdown('<h3>참여 기록 관리</h3><p class="muted">오늘 기록뿐 아니라 과거 기록도 검색해 여러 건을 한 번에 삭제할 수 있습니다.</p>', unsafe_allow_html=True)
         all_records = db_get_participants()
