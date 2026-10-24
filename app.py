@@ -597,10 +597,12 @@ elif st.session_state.user_role == 'participant':
 
     st.markdown('<div class="glass-card"><b>참여자 정보</b></div>', unsafe_allow_html=True)
     with st.form("participant_quick_registration_form", clear_on_submit=False):
-        st.text_input("학번 (5자리)", max_chars=5, placeholder="예: 10101", key="quick_sid_numeric", on_change=sanitize_quick_sid)
+        st.text_input("학번 (5자리)", max_chars=5, placeholder="예: 10101", key="quick_sid_numeric")
         st.text_input("이름 (선택)", placeholder="이름을 입력하세요. 비워 두면 - 로 등록됩니다.", key="quick_name_input")
         submitted = st.form_submit_button("등록", type="primary", use_container_width=True)
     if submitted:
+        # Streamlit form inputs cannot use on_change callbacks; sanitize after submission.
+        sanitize_student_id("quick_sid_numeric")
         st.session_state["quick_registration_submit_pending"] = True
         st.rerun()
 
