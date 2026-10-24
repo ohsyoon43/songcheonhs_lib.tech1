@@ -431,7 +431,7 @@ def numeric_id_to_string(value):
         return ""
     if number < 0 or number > 99999:
         return ""
-    return f"{number:05d}"
+    return str(number)
 
 def fill_staff_student_name():
     sid = numeric_id_to_string(st.session_state.get("staff_search_id_numeric"))
@@ -515,7 +515,7 @@ elif st.session_state.user_role == 'staff_login':
         st.markdown('<div class="eyebrow">STAFF LOGIN</div><div class="section-title">관리자 로그인</div><p class="muted">담당자 정보를 입력해 로그인해 주세요.</p>', unsafe_allow_html=True)
         staff_type = st.selectbox("직위 구분", ["도서부원", "사서교사"])
         if staff_type == "도서부원":
-            staff_std_id_value = st.number_input("학번 (5자리)", min_value=0, max_value=99999, value=None, step=1, format="%05d", key="staff_login_student_id", placeholder="숫자 5자리")
+            staff_std_id_value = st.number_input("학번 (5자리)", min_value=0, max_value=99999, value=None, step=1, key="staff_login_student_id", placeholder="숫자 5자리")
             staff_std_id = numeric_id_to_string(staff_std_id_value)
             staff_name = st.text_input("이름", placeholder="이름을 입력하세요")
         else:
@@ -597,7 +597,7 @@ elif st.session_state.user_role == 'participant':
 
     st.markdown('<div class="glass-card"><b>참여자 정보</b></div>', unsafe_allow_html=True)
     with st.form("participant_quick_registration_form", clear_on_submit=False):
-        st.number_input("학번 (5자리)", min_value=0, max_value=99999, value=None, step=1, format="%05d", placeholder="숫자 5자리", key="quick_sid_numeric")
+        st.number_input("학번 (5자리)", min_value=0, max_value=99999, value=None, step=1, placeholder="숫자 5자리", key="quick_sid_numeric")
         st.text_input("이름 (선택)", placeholder="이름을 입력하세요. 비워 두면 - 로 등록됩니다.", key="quick_name_input")
         submitted = st.form_submit_button("등록", type="primary", use_container_width=True)
     if submitted:
@@ -669,7 +669,7 @@ elif st.session_state.user_role == 'staff':
             saved_student = st.session_state.get("staff_history_search")
             if saved_student:
                 st.markdown(f'<div class="glass-card"><b>학번</b>　{saved_student[0]}<br><b>이름</b>　{saved_student[1]}</div>', unsafe_allow_html=True)
-            search_id_value = st.number_input("학번 입력 (5자리)", min_value=0, max_value=99999, value=None, step=1, format="%05d", key="staff_search_id_numeric", placeholder="숫자 5자리", on_change=fill_staff_student_name)
+            search_id_value = st.number_input("학번 입력 (5자리)", min_value=0, max_value=99999, value=None, step=1, key="staff_search_id_numeric", placeholder="숫자 5자리", on_change=fill_staff_student_name)
             search_id = numeric_id_to_string(search_id_value)
             search_name = st.text_input("이름 입력", key="staff_search_name", placeholder="학생 이름")
             search_btn_col, reset_btn_col = st.columns(2, gap="small")
@@ -867,7 +867,7 @@ elif st.session_state.user_role == 'staff':
                                 db_add_log("행사 정보 수정", f"행사 [{old_name}] 정보 수정" + (f" → [{edited_name.strip()}]" if old_name != edited_name.strip() else ""), st.session_state.staff_info)
                                 st.success("행사 정보가 수정되었습니다.")
                                 st.rerun()
-                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔴 마감")
+                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔒 마감")
                     label = "마감하기" if ev['status'] == "진행 중" else "재개하기"
                     if action_col.button(label, key=f"toggle_{ev['id']}"):
                         new_status = "마감" if ev['status'] == "진행 중" else "진행 중"
