@@ -291,6 +291,42 @@ img, video, iframe { max-width:100%; }
 }
 </style>''', unsafe_allow_html=True)
 
+# 학번 입력은 모바일/iPad에서 숫자 키패드를 띄우고, PC에서도 숫자만 입력되도록 제한
+st.markdown(r'''<script>
+(function() {
+  function setNumericStudentInputs() {
+    try {
+      const doc = window.parent.document;
+      doc.querySelectorAll('input').forEach(function(el) {
+        const label = (el.getAttribute('aria-label') || '').toLowerCase();
+        const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+        const isStudentId = label.includes('학번') || placeholder.includes('10101');
+        if (!isStudentId || el.dataset.numericStudentId === '1') return;
+        el.dataset.numericStudentId = '1';
+        el.setAttribute('inputmode', 'numeric');
+        el.setAttribute('pattern', '[0-9]*');
+        el.setAttribute('autocomplete', 'off');
+        el.addEventListener('beforeinput', function(e) {
+          if (e.data && /[^0-9]/.test(e.data) && e.inputType !== 'deleteContentBackward' && e.inputType !== 'deleteContentForward') e.preventDefault();
+        });
+        el.addEventListener('input', function() {
+          const clean = el.value.replace(/[^0-9]/g, '').slice(0, 5);
+          if (el.value !== clean) {
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(el, clean);
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+          }
+        });
+      });
+    } catch (e) {}
+  }
+  setNumericStudentInputs();
+  const doc = window.parent.document;
+  const observer = new MutationObserver(setNumericStudentInputs);
+  observer.observe(doc.body, {childList: true, subtree: true});
+})();
+</script>''', unsafe_allow_html=True)
+
 # 접근성·기기 호환 설정: Streamlit 위젯 기반 테마 전환
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = False
@@ -817,7 +853,7 @@ elif st.session_state.user_role == 'staff':
                                 db_add_log("행사 정보 수정", f"행사 [{old_name}] 정보 수정" + (f" → [{edited_name.strip()}]" if old_name != edited_name.strip() else ""), st.session_state.staff_info)
                                 st.success("행사 정보가 수정되었습니다.")
                                 st.rerun()
-                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔴 마감")
+                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔴  마감")
                     label = "마감하기" if ev['status'] == "진행 중" else "재개하기"
                     if action_col.button(label, key=f"toggle_{ev['id']}"):
                         new_status = "마감" if ev['status'] == "진행 중" else "진행 중"
