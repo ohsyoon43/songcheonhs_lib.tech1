@@ -427,10 +427,10 @@ if st.session_state.user_role is None:
         st.write("")
         with st.expander("📘 사용 설명 보기", expanded=False):
             st.markdown("""
-            **1. 학생 · 일반 참여자**
-            - `학생 · 일반 참여자 등록`을 선택합니다.
-            - 참여할 행사를 고르고 학번 5자리와 이름을 입력한 뒤 **참여 등록하기**를 누릅니다.
-            - 같은 날 같은 행사에 이미 등록한 경우 경고가 표시됩니다. 중복 등록을 원할 때만 **네, 중복 등록**을 선택하세요.
+            **1. 학생 · 빠른 등록**
+            - `빠른 등록`을 선택합니다.
+            - 학년, 반, 번호를 버튼으로 선택합니다. 이름은 기존 등록 기록에 있으면 선택할 수 있으며, 몰라도 건너뛸 수 있습니다.
+            - 참여할 행사를 고른 뒤 등록합니다. 같은 날 같은 행사에 이미 등록한 경우 경고가 표시됩니다.
 
             **2. 사서교사 · 도서부원**
             - 관리자 로그인을 선택하고 직위와 담당자 정보를 입력합니다.
@@ -441,7 +441,7 @@ if st.session_state.user_role is None:
             - 행사 목록에 등록할 행사가 없거나 행사가 마감된 경우 관리자에게 문의하세요.
             - 학번과 이름을 정확히 확인한 뒤 등록해 주세요.
             """)
-        if st.button("학생 · 일반 참여자 등록", use_container_width=True):
+        if st.button("빠른 등록", use_container_width=True):
             st.session_state.logout_requested = False; st.session_state.user_role = 'participant'; persist_login('participant'); st.rerun()
         if st.button("사서교사 · 도서부원 관리자 로그인", use_container_width=True):
             st.session_state.logout_requested = False; st.session_state.user_role = 'staff_login'; st.rerun()
@@ -477,65 +477,129 @@ elif st.session_state.user_role == 'staff_login':
                 st.session_state.user_role = None; clear_persisted_login(); st.rerun()
 
 # ------------------------------------------------------------
-# Participant registration
+# Participant quick registration (button-driven for mobile accessibility)
 # ------------------------------------------------------------
 elif st.session_state.user_role == 'participant':
-    # 입력 위젯이 생성되기 전에만 키 값을 초기화해 WidgetAlreadyInstantiated 오류 방지
-    if st.session_state.pop('clear_participant_inputs', False):
-        st.session_state['participant_sid'] = ''
-        st.session_state['participant_name'] = ''
     top1, top2 = st.columns([5, 1])
-    with top1: st.markdown('<div class="eyebrow">EVENT CHECK-IN</div><div class="section-title">도서관 행사 참여 등록</div>', unsafe_allow_html=True)
+    with top1:
+        st.markdown('<div class="eyebrow">QUICK REGISTRATION</div><div class="section-title">빠른 등록</div>', unsafe_allow_html=True)
     with top2:
         if st.button("메인으로", key="participant_home"):
-            st.session_state.user_role = None; clear_persisted_login(); st.rerun()
-    _, formcol, _ = st.columns([0.7, 2.2, 0.7])
-    with formcol:
-        st.markdown('<div class="glass-card"><b>참여 정보를 입력해 주세요</b><p class="muted">행사를 선택하고 학번을 입력하면 등록됩니다. 이름은 자동으로 채워지며, 모르는 경우 학번만으로도 등록할 수 있어요.</p></div>', unsafe_allow_html=True)
-        df_events = db_get_events()
-        selected = st.selectbox("참여할 행사", event_options(df_events), key="participant_event")
-        sid = st.text_input("학번 (5자리)", placeholder="예: 10101", max_chars=5, key="participant_sid", on_change=fill_participant_name, help="학번을 입력하면 기존 등록 정보가 있을 때 이름이 자동으로 채워집니다.")
-        pname = st.text_input("이름", placeholder="학번과 이름을 확인해 주세요", key="participant_name")
-        participant_day = now_seoul().date()
-        pending_participant = (clean_event(selected), sid.strip(), participant_day.isoformat())
-        is_pending_participant = st.session_state.get("pending_participant_duplicate") == pending_participant
-        submit_participant = st.button("참여 등록하기", key="participant_submit")
-        confirm_participant = False
-        cancel_participant = False
-        if is_pending_participant:
-            st.warning("⚠️ 오늘 이 행사에 이미 등록한 기록이 있습니다. 중복 등록하시겠습니까?")
-            confirm_col, cancel_col = st.columns(2)
-            with confirm_col:
-                confirm_participant = st.button("네, 중복 등록", key="participant_confirm_duplicate", use_container_width=True)
-            with cancel_col:
-                cancel_participant = st.button("아니요, 취소", key="participant_cancel_duplicate", use_container_width=True)
-        if cancel_participant:
-            st.session_state.pop("pending_participant_duplicate", None)
-            st.info("중복 등록을 취소했습니다.")
+            st.session_state.user_role = None
+            clear_persisted_login()
             st.rerun()
-        if submit_participant or confirm_participant:
-            valid, grade, class_num, number = parse_student_id(sid)
-            if "행사 없음" in selected: st.error("등록 가능한 행사가 없습니다.")
-            elif "[마감]" in selected: st.error("마감된 행사입니다. 도서부원에게 문의해 주세요.")
-            elif not valid: st.error("올바른 5자리 학번을 입력해 주세요.")
+
+    df_events = db_get_events()
+    selected = st.selectbox("참여할 행사", event_options(df_events), key="participant_event")
+
+    # Keep button selections in session state. No student-ID typing is required.
+    st.session_state.setdefault("quick_grade", 1)
+    st.session_state.setdefault("quick_class", 1)
+    st.session_state.setdefault("quick_number", 1)
+    st.session_state.setdefault("quick_name", "")
+
+    st.markdown('<div class="glass-card"><b>학년 선택</b></div>', unsafe_allow_html=True)
+    grade_cols = st.columns(3)
+    for idx, grade_option in enumerate([1, 2, 3]):
+        with grade_cols[idx]:
+            if st.button(f"{grade_option}학년", key=f"quick_grade_{grade_option}", use_container_width=True, type="primary" if st.session_state.quick_grade == grade_option else "secondary"):
+                st.session_state.quick_grade = grade_option
+                st.session_state.quick_name = ""
+                st.rerun()
+
+    st.markdown('<div class="glass-card"><b>반 선택</b></div>', unsafe_allow_html=True)
+    for row_start in (1, 6):
+        class_cols = st.columns(5)
+        for offset, class_option in enumerate(range(row_start, min(row_start + 5, 10))):
+            with class_cols[offset]:
+                if st.button(f"{class_option}반", key=f"quick_class_{class_option}", use_container_width=True, type="primary" if st.session_state.quick_class == class_option else "secondary"):
+                    st.session_state.quick_class = class_option
+                    st.session_state.quick_name = ""
+                    st.rerun()
+
+    student_id = f"{st.session_state.quick_grade}{st.session_state.quick_class:02d}{st.session_state.quick_number:02d}"
+    st.markdown('<div class="glass-card"><b>번호 선택</b></div>', unsafe_allow_html=True)
+    for row_start in range(1, 41, 5):
+        number_cols = st.columns(5)
+        for offset, number_option in enumerate(range(row_start, min(row_start + 5, 41))):
+            with number_cols[offset]:
+                if st.button(f"{number_option}", key=f"quick_number_{number_option}", use_container_width=True, type="primary" if st.session_state.quick_number == number_option else "secondary"):
+                    st.session_state.quick_number = number_option
+                    st.session_state.quick_name = ""
+                    st.rerun()
+
+    st.markdown(f'<div class="glass-card"><b>선택한 학번</b><div style="font-size:1.55rem;font-weight:750;letter-spacing:.04em;margin-top:.25rem">{student_id}</div></div>', unsafe_allow_html=True)
+
+    # Names are selectable by button when this student has appeared in prior records.
+    # If no known name exists, skipping the name is always available.
+    df_known = db_get_participants()
+    known_names = []
+    if not df_known.empty:
+        known_names = (df_known[df_known["student_id"].astype(str).str.strip() == student_id]["name"]
+                       .dropna().astype(str).str.strip().tolist())
+        known_names = list(dict.fromkeys(n for n in known_names if n and n != "이름 미입력"))
+    st.markdown('<div class="glass-card"><b>이름 선택 (선택 사항)</b></div>', unsafe_allow_html=True)
+    if known_names:
+        for row_start in range(0, len(known_names), 3):
+            row_names = known_names[row_start:row_start + 3]
+            name_cols = st.columns(3)
+            for offset, known_name in enumerate(row_names):
+                with name_cols[offset]:
+                    if st.button(known_name, key=f"quick_known_name_{row_start + offset}", use_container_width=True, type="primary" if st.session_state.quick_name == known_name else "secondary"):
+                        st.session_state.quick_name = known_name
+                        st.rerun()
+        if st.button("이름 건너뛰기", key="quick_skip_name", use_container_width=True, type="primary" if not st.session_state.quick_name else "secondary"):
+            st.session_state.quick_name = ""
+            st.rerun()
+    else:
+        st.caption("이전에 등록된 이름이 없습니다. 이름 없이 등록할 수 있습니다.")
+        if st.button("이름 건너뛰기", key="quick_skip_name_only", use_container_width=True, type="primary"):
+            st.session_state.quick_name = ""
+            st.rerun()
+
+    participant_day = now_seoul().date()
+    pending_participant = (clean_event(selected), student_id, participant_day.isoformat())
+    is_pending_participant = st.session_state.get("pending_participant_duplicate") == pending_participant
+    submit_participant = st.button("등록", key="participant_submit", type="primary", use_container_width=True)
+    confirm_participant = False
+    cancel_participant = False
+    if is_pending_participant:
+        st.warning("오늘 이 행사에 이미 등록한 기록이 있습니다. 중복 등록하시겠습니까?")
+        confirm_col, cancel_col = st.columns(2)
+        with confirm_col:
+            confirm_participant = st.button("네, 중복 등록", key="participant_confirm_duplicate", use_container_width=True, type="primary")
+        with cancel_col:
+            cancel_participant = st.button("아니요, 취소", key="participant_cancel_duplicate", use_container_width=True)
+    if cancel_participant:
+        st.session_state.pop("pending_participant_duplicate", None)
+        st.rerun()
+    if submit_participant or confirm_participant:
+        valid, grade, class_num, number = parse_student_id(student_id)
+        if "행사 없음" in selected:
+            st.error("등록 가능한 행사가 없습니다.")
+        elif "[마감]" in selected:
+            st.error("마감된 행사입니다. 도서부원에게 문의해 주세요.")
+        elif not valid:
+            st.error("학년, 반, 번호를 다시 선택해 주세요.")
+        else:
+            event = clean_event(selected)
+            today_count = db_count_participant_on_date(event, student_id, participant_day)
+            if today_count > 0 and not confirm_participant:
+                st.session_state["pending_participant_duplicate"] = (event, student_id, participant_day.isoformat())
+                st.rerun()
             else:
-                event = clean_event(selected)
-                today_count = db_count_participant_on_date(event, sid.strip(), participant_day)
-                if today_count > 0 and not confirm_participant:
-                    st.session_state["pending_participant_duplicate"] = (event, sid.strip(), participant_day.isoformat())
-                    st.rerun()
-                else:
-                    # 이름을 입력하지 않아도 등록 가능. 중복 참여는 확인 후 허용.
-                    registered_name = pname.strip() or find_student_name(sid.strip()) or "이름 미입력"
-                    db_add_participant({"event_name":event,"student_id":sid.strip(),"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
-                    db_add_log("참여자 등록", f"[{event}] {sid} {registered_name} 등록 완료", "참여자 본인")
-                    st.session_state.pop("pending_participant_duplicate", None)
-                    st.session_state['clear_participant_inputs'] = True
-                    note = "" if registered_name != "이름 미입력" else " 이름은 관리자 화면에서 나중에 수정할 수 있어요."
-                    st.session_state["participant_registration_flash"] = f"학번 {sid} 등록이 완료되었습니다!{note}"
-                    st.rerun()
-        if st.session_state.get("participant_registration_flash"):
-            st.success(st.session_state.pop("participant_registration_flash"))
+                registered_name = st.session_state.quick_name.strip() or find_student_name(student_id) or "이름 미입력"
+                db_add_participant({"event_name":event,"student_id":student_id,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
+                db_add_log("참여자 등록", f"[{event}] {student_id} {registered_name} 등록 완료", "참여자 본인")
+                st.session_state.pop("pending_participant_duplicate", None)
+                st.session_state.quick_grade = 1
+                st.session_state.quick_class = 1
+                st.session_state.quick_number = 1
+                st.session_state.quick_name = ""
+                st.session_state["participant_registration_flash"] = f"학번 {student_id} 등록이 완료되었습니다!" + (" 이름은 관리자 화면에서 나중에 수정할 수 있어요." if registered_name == "이름 미입력" else "")
+                st.rerun()
+    if st.session_state.get("participant_registration_flash"):
+        st.success(st.session_state.pop("participant_registration_flash"))
 
 # ------------------------------------------------------------
 # Staff administration dashboard
