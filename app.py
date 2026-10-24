@@ -489,45 +489,9 @@ elif st.session_state.user_role == 'staff_login':
                 st.session_state.user_role = None; clear_persisted_login(); st.rerun()
 
 # ------------------------------------------------------------
-# Participant quick registration: desktop typing / mobile button grid
+# Participant quick registration: same typing form on desktop and mobile
 # ------------------------------------------------------------
 elif st.session_state.user_role == 'participant':
-    # Responsive layout: CSS switches between desktop form and mobile controls.
-    st.markdown("""<style>
-    @media (min-width: 761px) {
-      .st-key-mobile_quick_controls { display: none !important; }
-      .st-key-desktop_quick_controls { display: block !important; }
-    }
-    @media (max-width: 760px) {
-      .st-key-desktop_quick_controls { display: none !important; }
-      .st-key-mobile_quick_controls { display: block !important; }
-      .st-key-mobile_quick_controls [data-testid='stHorizontalBlock'] { gap: .35rem !important; }
-      .st-key-mobile_quick_controls [data-testid='stButton'] button {
-        min-height: 2.35rem !important; padding: .25rem .2rem !important;
-        font-size: .9rem !important; border-radius: 10px !important;
-        transition: background-color .16s ease, color .16s ease, border-color .16s ease !important;
-      }
-      /* 선택되지 않은 학년·반·번호 버튼: 흰 배경 + 검은 테두리/글씨 */
-      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='secondary'] {
-        background: #ffffff !important; color: #111827 !important;
-        border: 1.5px solid #111827 !important; box-shadow: none !important;
-      }
-      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='secondary'] p,
-      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='secondary'] span {
-        color: #111827 !important;
-      }
-      /* 선택된 버튼: 파란 배경 + 흰 글씨 */
-      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='primary'] {
-        background: #2563eb !important; color: #ffffff !important;
-        border: 1.5px solid #2563eb !important; box-shadow: none !important;
-      }
-      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='primary'] p,
-      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='primary'] span {
-        color: #ffffff !important;
-      }
-    }
-    </style>""", unsafe_allow_html=True)
-
     top1, top2 = st.columns([5, 1])
     with top1:
         st.markdown('<div class="eyebrow">QUICK REGISTRATION</div><div class="section-title">빠른 등록</div>', unsafe_allow_html=True)
@@ -539,22 +503,15 @@ elif st.session_state.user_role == 'participant':
 
     df_events = db_get_events()
     selected = st.selectbox("참여할 행사", event_options(df_events), key="participant_event")
-    st.session_state.setdefault("quick_grade", 1)
-    st.session_state.setdefault("quick_class", 1)
-    st.session_state.setdefault("quick_number", 1)
-    st.session_state.setdefault("quick_name", "")
-    st.session_state.setdefault("desktop_quick_sid", "")
-    st.session_state.setdefault("desktop_quick_name", "")
-    if st.session_state.pop("desktop_quick_reset_pending", False):
-        st.session_state["desktop_quick_sid"] = ""
-        st.session_state["desktop_quick_name"] = ""
+    st.session_state.setdefault("quick_sid_input", "")
+    st.session_state.setdefault("quick_name_input", "")
 
-    # Process submissions before recreating widgets,
-    # so input state can safely be cleared without Streamlit widget-state errors.
-    if st.session_state.pop("desktop_quick_submit_pending", False):
-        desktop_sid = str(st.session_state.get("desktop_quick_sid", "")).strip()
-        desktop_name = str(st.session_state.get("desktop_quick_name", "")).strip()
-        valid, grade, class_num, number = parse_student_id(desktop_sid)
+    # Handle registration and duplicate-confirm actions before creating input widgets,
+    # so successful registration can safely clear their session-state values.
+    if st.session_state.pop("quick_registration_submit_pending", False):
+        sid = str(st.session_state.get("quick_sid_input", "")).strip()
+        name = str(st.session_state.get("quick_name_input", "")).strip() or "-"
+        valid, grade, class_num, number = parse_student_id(sid)
         if "행사 없음" in selected:
             st.session_state["participant_registration_flash"] = "등록 가능한 행사가 없습니다."
         elif "[마감]" in selected:
@@ -564,127 +521,54 @@ elif st.session_state.user_role == 'participant':
         else:
             event = clean_event(selected)
             participant_day = now_seoul().date()
-            today_count = db_count_participant_on_date(event, desktop_sid, participant_day)
-            if today_count > 0:
-                st.session_state["pending_participant_duplicate"] = (event, desktop_sid, participant_day.isoformat(), desktop_name)
+            if db_count_participant_on_date(event, sid, participant_day) > 0:
+                st.session_state["pending_participant_duplicate"] = (event, sid, participant_day.isoformat(), name)
             else:
-                registered_name = desktop_name or find_student_name(desktop_sid) or "이름 미입력"
-                db_add_participant({"event_name":event,"student_id":desktop_sid,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
-                db_add_log("참여자 등록", f"[{event}] {desktop_sid} {registered_name} 등록 완료", "참여자 본인")
-                st.session_state["participant_registration_flash"] = f"학번 {desktop_sid} 등록이 완료되었습니다!"
-                st.session_state["desktop_quick_sid"] = ""
-                st.session_state["desktop_quick_name"] = ""
+                db_add_participant({"event_name":event,"student_id":sid,"grade":grade,"class":class_num,"number":number,"name":name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
+                db_add_log("참여자 등록", f"[{event}] {sid} {name} 등록 완료", "참여자 본인")
+                st.session_state["participant_registration_flash"] = f"학번 {sid} 등록이 완료되었습니다!"
+                st.session_state["quick_sid_input"] = ""
+                st.session_state["quick_name_input"] = ""
 
-    # Desktop: type the five-digit ID, auto-fill a known name, then Enter in the name field to register.
-    with st.container(key="desktop_quick_controls"):
-        st.markdown('<div class="glass-card"><b>참여자 정보</b></div>', unsafe_allow_html=True)
-        st.text_input("학번 (5자리)", max_chars=5, placeholder="예: 10101", key="desktop_quick_sid", on_change=desktop_quick_sid_changed)
-        st.text_input("이름", placeholder="기존 등록 이름은 자동으로 표시됩니다", key="desktop_quick_name", on_change=desktop_quick_name_entered)
-        if st.session_state.get("desktop_focus_name", False) and len(str(st.session_state.get("desktop_quick_sid", ""))) == 5:
-            # Best-effort focus handoff in desktop browsers; normal keyboard tab order remains available.
-            st.components.v1.html("""<script>
-            try {
-              const d = window.parent.document;
-              const fields = Array.from(d.querySelectorAll('input'));
-              const nameField = fields.find(el => (el.getAttribute('aria-label') || '').trim() === '이름');
-              if (nameField) nameField.focus();
-            } catch (e) {}
-            </script>""", height=0)
-            st.session_state["desktop_focus_name"] = False
-        if st.button("등록", key="desktop_quick_register_button", type="primary", use_container_width=True):
-            st.session_state["desktop_quick_submit_pending"] = True
-            st.rerun()
+    if st.session_state.pop("quick_duplicate_confirm_pending", False):
+        pending = st.session_state.get("pending_participant_duplicate")
+        if pending and pending[0] == clean_event(selected):
+            event, pending_sid, pending_day, pending_name = pending
+            valid, grade, class_num, number = parse_student_id(pending_sid)
+            registered_name = str(pending_name or "-").strip() or "-"
+            db_add_participant({"event_name":event,"student_id":pending_sid,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
+            db_add_log("참여자 등록", f"[{event}] {pending_sid} {registered_name} 중복 등록 완료", "참여자 본인")
+            st.session_state.pop("pending_participant_duplicate", None)
+            st.session_state["participant_registration_flash"] = f"학번 {pending_sid} 등록이 완료되었습니다!"
+            st.session_state["quick_sid_input"] = ""
+            st.session_state["quick_name_input"] = ""
 
-    # Mobile: compact three-column button grids; no name field or typing required.
-    with st.container(key="mobile_quick_controls"):
-        st.markdown('<div class="glass-card"><b>학년 선택</b></div>', unsafe_allow_html=True)
-        grade_cols = st.columns(3, gap="small")
-        for idx, grade_option in enumerate([1, 2, 3]):
-            with grade_cols[idx]:
-                if st.button(f"{grade_option}학년", key=f"quick_grade_{grade_option}", use_container_width=True, type="primary" if st.session_state.quick_grade == grade_option else "secondary"):
-                    st.session_state.quick_grade = grade_option
-                    st.session_state.quick_name = ""
-                    st.rerun()
+    if st.session_state.pop("quick_duplicate_cancel_pending", False):
+        st.session_state.pop("pending_participant_duplicate", None)
 
-        st.markdown('<div class="glass-card"><b>반 선택</b></div>', unsafe_allow_html=True)
-        for row_start in (1, 4, 7):
-            class_cols = st.columns(3, gap="small")
-            for offset, class_option in enumerate(range(row_start, min(row_start + 3, 10))):
-                with class_cols[offset]:
-                    if st.button(f"{class_option}반", key=f"quick_class_{class_option}", use_container_width=True, type="primary" if st.session_state.quick_class == class_option else "secondary"):
-                        st.session_state.quick_class = class_option
-                        st.session_state.quick_name = ""
-                        st.rerun()
+    st.markdown('<div class="glass-card"><b>참여자 정보</b></div>', unsafe_allow_html=True)
+    with st.form("participant_quick_registration_form", clear_on_submit=False):
+        st.text_input("학번 (5자리)", max_chars=5, placeholder="예: 10101", key="quick_sid_input")
+        st.text_input("이름 (선택)", placeholder="이름을 입력하세요. 비워 두면 - 로 등록됩니다.", key="quick_name_input")
+        submitted = st.form_submit_button("등록", type="primary", use_container_width=True)
+    if submitted:
+        st.session_state["quick_registration_submit_pending"] = True
+        st.rerun()
 
-        student_id = f"{st.session_state.quick_grade}{st.session_state.quick_class:02d}{st.session_state.quick_number:02d}"
-        st.markdown('<div class="glass-card"><b>번호 선택</b></div>', unsafe_allow_html=True)
-        for row_start in range(1, 33, 5):
-            number_cols = st.columns(5, gap="small")
-            for offset, number_option in enumerate(range(row_start, min(row_start + 5, 33))):
-                with number_cols[offset]:
-                    if st.button(f"{number_option}번", key=f"quick_number_{number_option}", use_container_width=True, type="primary" if st.session_state.quick_number == number_option else "secondary"):
-                        st.session_state.quick_number = number_option
-                        st.session_state.quick_name = ""
-                        st.rerun()
-        st.markdown(f'<div class="glass-card"><b>선택한 학번</b><div style="font-size:1.35rem;font-weight:750;letter-spacing:.04em;margin-top:.25rem">{student_id}</div></div>', unsafe_allow_html=True)
-        mobile_submit = st.button("등록", key="participant_mobile_submit", type="primary", use_container_width=True)
-
-    # Duplicate confirmation works for both layouts.
     pending = st.session_state.get("pending_participant_duplicate")
     is_pending_participant = bool(pending and pending[0] == clean_event(selected))
-    mobile_submit = False
-    confirm_participant = False
-    cancel_participant = False
     if is_pending_participant:
         st.warning("오늘 이 행사에 이미 등록한 기록이 있습니다. 중복 등록하시겠습니까?")
         confirm_col, cancel_col = st.columns(2)
         with confirm_col:
-            confirm_participant = st.button("네, 중복 등록", key="participant_confirm_duplicate", use_container_width=True, type="primary")
+            if st.button("네, 중복 등록", key="participant_confirm_duplicate", use_container_width=True, type="primary"):
+                st.session_state["quick_duplicate_confirm_pending"] = True
+                st.rerun()
         with cancel_col:
-            cancel_participant = st.button("아니요, 취소", key="participant_cancel_duplicate", use_container_width=True)
-    if cancel_participant:
-        st.session_state.pop("pending_participant_duplicate", None)
-        st.rerun()
-    if confirm_participant and pending:
-        _, pending_sid, pending_day, pending_name = (pending + ("",))[:4] if len(pending) == 3 else pending
-        valid, grade, class_num, number = parse_student_id(pending_sid)
-        event = clean_event(selected)
-        registered_name = (pending_name or find_student_name(pending_sid) or "이름 미입력")
-        db_add_participant({"event_name":event,"student_id":pending_sid,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
-        db_add_log("참여자 등록", f"[{event}] {pending_sid} {registered_name} 등록 완료", "참여자 본인")
-        st.session_state.pop("pending_participant_duplicate", None)
-        st.session_state.quick_grade = 1
-        st.session_state.quick_class = 1
-        st.session_state.quick_number = 1
-        st.session_state.quick_name = ""
-        st.session_state["desktop_quick_reset_pending"] = True
-        st.session_state["participant_registration_flash"] = f"학번 {pending_sid} 등록이 완료되었습니다!"
-        st.rerun()
+            if st.button("아니요, 취소", key="participant_cancel_duplicate", use_container_width=True):
+                st.session_state["quick_duplicate_cancel_pending"] = True
+                st.rerun()
 
-    # Mobile button-driven submit.
-    if mobile_submit:
-        student_id = f"{st.session_state.quick_grade}{st.session_state.quick_class:02d}{st.session_state.quick_number:02d}"
-        valid, grade, class_num, number = parse_student_id(student_id)
-        if "행사 없음" in selected:
-            st.error("등록 가능한 행사가 없습니다.")
-        elif "[마감]" in selected:
-            st.error("마감된 행사입니다. 도서부원에게 문의해 주세요.")
-        else:
-            event = clean_event(selected)
-            participant_day = now_seoul().date()
-            if db_count_participant_on_date(event, student_id, participant_day) > 0:
-                st.session_state["pending_participant_duplicate"] = (event, student_id, participant_day.isoformat(), "")
-                st.rerun()
-            else:
-                registered_name = find_student_name(student_id) or "이름 미입력"
-                db_add_participant({"event_name":event,"student_id":student_id,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
-                db_add_log("참여자 등록", f"[{event}] {student_id} {registered_name} 등록 완료", "참여자 본인")
-                st.session_state.quick_grade = 1
-                st.session_state.quick_class = 1
-                st.session_state.quick_number = 1
-                st.session_state.quick_name = ""
-                st.session_state["participant_registration_flash"] = f"학번 {student_id} 등록이 완료되었습니다!"
-                st.rerun()
     if st.session_state.get("participant_registration_flash"):
         st.success(st.session_state.pop("participant_registration_flash"))
 
