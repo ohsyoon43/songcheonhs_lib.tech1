@@ -11,7 +11,7 @@ import os
 # ------------------------------------------------------------
 # Page configuration
 # ------------------------------------------------------------
-st.set_page_config(page_title="송천고 행사 관리 시스템", page_icon="📚", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="송천고 도서관 행사 관리 시스템", page_icon="📚", layout="wide", initial_sidebar_state="collapsed")
 SEOUL = ZoneInfo("Asia/Seoul")
 def now_seoul():
     return datetime.now(SEOUL)
@@ -381,7 +381,26 @@ if st.session_state.dark_mode:
     }
     </style>''', unsafe_allow_html=True)
 
-st.markdown('''<div class="brandbar"><div class="brandname">Songcheon <span style="color:#3182F6">Lib Tech</span></div><div class="branddesc">인천송천고등학교 · 행사 관리 시스템</div></div>''', unsafe_allow_html=True)
+st.markdown('''<div class="brandbar"><div class="brandname">Songcheon <span style="color:#3182F6">Lib</span> Tech</div><div class="branddesc">인천송천고등학교 도서관 · 행정 시스템</div></div>''', unsafe_allow_html=True)
+
+# Prefer Korean text composition for name fields; numeric ID fields are limited to five characters.
+import streamlit.components.v1 as components
+components.html("""
+<script>
+try {
+  const doc = window.parent.document;
+  doc.documentElement.lang = 'ko';
+  const applyKorean = () => {
+    doc.querySelectorAll('input').forEach((el) => {
+      const label = (el.getAttribute('aria-label') || '') + ' ' + (el.placeholder || '');
+      if (label.includes('이름') || label.includes('선생님')) el.setAttribute('lang', 'ko');
+    });
+  };
+  applyKorean();
+  new MutationObserver(applyKorean).observe(doc.body, {childList:true, subtree:true});
+} catch (e) {}
+</script>
+""", height=0, width=0)
 
 def parse_student_id(std_id):
     value = str(std_id).strip()
@@ -432,6 +451,15 @@ def numeric_id_to_string(value):
     if number < 0 or number > 99999:
         return ""
     return str(number)
+
+def sanitize_staff_login_id():
+    raw = str(st.session_state.get("staff_login_student_id", ""))
+    st.session_state["staff_login_student_id"] = "".join(ch for ch in raw if ch.isdigit())[:5]
+
+def sanitize_staff_search_id():
+    raw = str(st.session_state.get("staff_search_id_numeric", ""))
+    st.session_state["staff_search_id_numeric"] = "".join(ch for ch in raw if ch.isdigit())[:5]
+    fill_staff_student_name()
 
 def fill_staff_student_name():
     sid = numeric_id_to_string(st.session_state.get("staff_search_id_numeric"))
@@ -515,8 +543,7 @@ elif st.session_state.user_role == 'staff_login':
         st.markdown('<div class="eyebrow">STAFF LOGIN</div><div class="section-title">관리자 로그인</div><p class="muted">담당자 정보를 입력해 로그인해 주세요.</p>', unsafe_allow_html=True)
         staff_type = st.selectbox("직위 구분", ["도서부원", "사서교사"])
         if staff_type == "도서부원":
-            staff_std_id_value = st.number_input("학번 (5자리)", min_value=0, max_value=99999, value=None, step=1, key="staff_login_student_id", placeholder="숫자 5자리")
-            staff_std_id = numeric_id_to_string(staff_std_id_value)
+            staff_std_id = st.text_input("학번 (5자리)", max_chars=5, key="staff_login_student_id", placeholder="숫자 5자리", on_change=sanitize_staff_login_id)
             staff_name = st.text_input("이름", placeholder="이름을 입력하세요")
         else:
             staff_std_id = "교직원"
@@ -558,7 +585,8 @@ elif st.session_state.user_role == 'participant':
     # Handle registration and duplicate-confirm actions before creating input widgets,
     # so successful registration can safely clear their session-state values.
     if st.session_state.pop("quick_registration_submit_pending", False):
-        sid = numeric_id_to_string(st.session_state.get("quick_sid_numeric"))
+        sid_raw = str(st.session_state.get("quick_sid_numeric", ""))
+        sid = sid_raw if sid_raw.isdigit() and len(sid_raw) == 5 else ""
         name = str(st.session_state.get("quick_name_input", "")).strip() or "-"
         valid, grade, class_num, number = parse_student_id(sid)
         if "행사 없음" in selected:
@@ -597,7 +625,7 @@ elif st.session_state.user_role == 'participant':
 
     st.markdown('<div class="glass-card"><b>참여자 정보</b></div>', unsafe_allow_html=True)
     with st.form("participant_quick_registration_form", clear_on_submit=False):
-        st.number_input("학번 (5자리)", min_value=0, max_value=99999, value=None, step=1, placeholder="숫자 5자리", key="quick_sid_numeric")
+        st.text_input("학번 (5자리)", max_chars=5, placeholder="숫자 5자리", key="quick_sid_numeric")
         st.text_input("이름 (선택)", placeholder="이름을 입력하세요. 비워 두면 - 로 등록됩니다.", key="quick_name_input")
         submitted = st.form_submit_button("등록", type="primary", use_container_width=True)
     if submitted:
@@ -669,8 +697,7 @@ elif st.session_state.user_role == 'staff':
             saved_student = st.session_state.get("staff_history_search")
             if saved_student:
                 st.markdown(f'<div class="glass-card"><b>학번</b>　{saved_student[0]}<br><b>이름</b>　{saved_student[1]}</div>', unsafe_allow_html=True)
-            search_id_value = st.number_input("학번 입력 (5자리)", min_value=0, max_value=99999, value=None, step=1, key="staff_search_id_numeric", placeholder="숫자 5자리", on_change=fill_staff_student_name)
-            search_id = numeric_id_to_string(search_id_value)
+            search_id = st.text_input("학번 입력 (5자리)", max_chars=5, key="staff_search_id_numeric", placeholder="숫자 5자리", on_change=sanitize_staff_search_id)
             search_name = st.text_input("이름 입력", key="staff_search_name", placeholder="학생 이름")
             search_btn_col, reset_btn_col = st.columns(2, gap="small")
             with search_btn_col:
@@ -867,7 +894,7 @@ elif st.session_state.user_role == 'staff':
                                 db_add_log("행사 정보 수정", f"행사 [{old_name}] 정보 수정" + (f" → [{edited_name.strip()}]" if old_name != edited_name.strip() else ""), st.session_state.staff_info)
                                 st.success("행사 정보가 수정되었습니다.")
                                 st.rerun()
-                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔒 마감")
+                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔴 마감")
                     label = "마감하기" if ev['status'] == "진행 중" else "재개하기"
                     if action_col.button(label, key=f"toggle_{ev['id']}"):
                         new_status = "마감" if ev['status'] == "진행 중" else "진행 중"
