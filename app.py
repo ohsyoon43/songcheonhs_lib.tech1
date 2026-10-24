@@ -248,6 +248,38 @@ h1,h2,h3,h4 { color:#20232b; letter-spacing:-.65px; }
 img, video, iframe { max-width:100%; }
 [data-testid="stAppViewContainer"] { overflow-x:hidden; }
 [data-testid="stHorizontalBlock"] { max-width:100%; }
+
+/* Subtle transitions for layout changes and interaction feedback.
+   Streamlit reruns still rebuild widgets, so keep motion short and lightweight. */
+[data-testid="stHorizontalBlock"],
+[data-testid="column"],
+[data-testid="stVerticalBlockBorderWrapper"],
+[data-testid="stTextInput"],
+[data-testid="stButton"],
+[data-testid="stFormSubmitButton"],
+[data-testid="stSelectbox"],
+[data-testid="stDateInput"],
+[data-testid="stTimeInput"] {
+  transition: opacity .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.glass-card { animation: softEnter .2s ease both; }
+@keyframes softEnter {
+  from { opacity: .72; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.stButton > button, .stFormSubmitButton > button, .stDownloadButton > button {
+  transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+[data-testid="stTextInput"] input,
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stDateInput"] input,
+[data-testid="stTimeInput"] input {
+  transition: border-color .14s ease, box-shadow .14s ease, background-color .14s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
 [data-testid="stButton"] button, [data-testid="stDownloadButton"] button { touch-action:manipulation; }
 @supports (-webkit-touch-callout: none) { input, textarea, select { font-size:16px !important; } }
 @media (max-width:760px) {
