@@ -503,8 +503,27 @@ elif st.session_state.user_role == 'participant':
       .st-key-mobile_quick_controls { display: block !important; }
       .st-key-mobile_quick_controls [data-testid='stHorizontalBlock'] { gap: .35rem !important; }
       .st-key-mobile_quick_controls [data-testid='stButton'] button {
-        min-height: 2.35rem !important; padding: .25rem .35rem !important;
+        min-height: 2.35rem !important; padding: .25rem .2rem !important;
         font-size: .9rem !important; border-radius: 10px !important;
+        transition: background-color .16s ease, color .16s ease, border-color .16s ease !important;
+      }
+      /* 선택되지 않은 학년·반·번호 버튼: 흰 배경 + 검은 테두리/글씨 */
+      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='secondary'] {
+        background: #ffffff !important; color: #111827 !important;
+        border: 1.5px solid #111827 !important; box-shadow: none !important;
+      }
+      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='secondary'] p,
+      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='secondary'] span {
+        color: #111827 !important;
+      }
+      /* 선택된 버튼: 파란 배경 + 흰 글씨 */
+      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='primary'] {
+        background: #2563eb !important; color: #ffffff !important;
+        border: 1.5px solid #2563eb !important; box-shadow: none !important;
+      }
+      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='primary'] p,
+      .st-key-mobile_quick_controls [data-testid='stButton'] button[kind='primary'] span {
+        color: #ffffff !important;
       }
     }
     </style>""", unsafe_allow_html=True)
@@ -599,9 +618,9 @@ elif st.session_state.user_role == 'participant':
 
         student_id = f"{st.session_state.quick_grade}{st.session_state.quick_class:02d}{st.session_state.quick_number:02d}"
         st.markdown('<div class="glass-card"><b>번호 선택</b></div>', unsafe_allow_html=True)
-        for row_start in range(1, 41, 3):
-            number_cols = st.columns(3, gap="small")
-            for offset, number_option in enumerate(range(row_start, min(row_start + 3, 41))):
+        for row_start in range(1, 33, 5):
+            number_cols = st.columns(5, gap="small")
+            for offset, number_option in enumerate(range(row_start, min(row_start + 5, 33))):
                 with number_cols[offset]:
                     if st.button(f"{number_option}번", key=f"quick_number_{number_option}", use_container_width=True, type="primary" if st.session_state.quick_number == number_option else "secondary"):
                         st.session_state.quick_number = number_option
