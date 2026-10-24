@@ -300,11 +300,12 @@ st.markdown(r'''<script>
       doc.querySelectorAll('input').forEach(function(el) {
         const label = (el.getAttribute('aria-label') || '').toLowerCase();
         const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
-        const isStudentId = label.includes('학번') || placeholder.includes('10101');
+        const isStudentId = label.includes('학번') || placeholder.includes('숫자 5자리') || placeholder.includes('10101');
         if (!isStudentId || el.dataset.numericStudentId === '1') return;
         el.dataset.numericStudentId = '1';
         el.setAttribute('inputmode', 'numeric');
         el.setAttribute('pattern', '[0-9]*');
+        el.setAttribute('maxlength', '5');
         el.setAttribute('autocomplete', 'off');
         el.addEventListener('beforeinput', function(e) {
           if (e.data && /[^0-9]/.test(e.data) && e.inputType !== 'deleteContentBackward' && e.inputType !== 'deleteContentForward') e.preventDefault();
@@ -381,7 +382,7 @@ if st.session_state.dark_mode:
     }
     </style>''', unsafe_allow_html=True)
 
-st.markdown('''<div class="brandbar"><div class="brandname">Songcheon <span style="color:#3182F6">Lib</span> Tech</div><div class="branddesc">인천송천고등학교 도서관 · 행정 시스템</div></div>''', unsafe_allow_html=True)
+st.markdown('''<div class="brandbar"><div class="brandname">Songcheon <span style="color:#3182F6">Lib</span> <span style="color:#3182F6">Tech</span></div><div class="branddesc">송천고 도서관 행사 관리 시스템</div></div>''', unsafe_allow_html=True)
 
 # Prefer Korean text composition for name fields; numeric ID fields are limited to five characters.
 import streamlit.components.v1 as components
@@ -511,7 +512,7 @@ def clear_persisted_login():
 if st.session_state.user_role is None:
     spacer1, main, spacer2 = st.columns([1, 1.35, 1])
     with main:
-        st.markdown('''<div class="hero-card"><div class="eyebrow">EVENT MANAGEMENT</div><div class="hero-title">인천송천고 도서관</div><p class="hero-subtitle">행사 참여 등록부터 통합 데이터 관리까지<br>한곳에서 간편하게 관리하세요.</p><span class="pill">SONGCHEON EVENT SYSTEM</span></div>''', unsafe_allow_html=True)
+        st.markdown('''<div class="hero-card"><div class="eyebrow">EVENT MANAGEMENT</div><div class="hero-title">인천송천고 도서관</div><p class="hero-subtitle">행사 참여 등록부터 통합 데이터 관리까지<br>한곳에서 간편하게 관리하세요.</p><span class="pill">SONGCHEON LIB EVENT SYSTEM</span></div>''', unsafe_allow_html=True)
         st.write("")
         with st.expander("📘 사용 설명 보기", expanded=False):
             st.markdown("""
@@ -629,8 +630,12 @@ elif st.session_state.user_role == 'participant':
         st.text_input("이름 (선택)", placeholder="이름을 입력하세요. 비워 두면 - 로 등록됩니다.", key="quick_name_input")
         submitted = st.form_submit_button("등록", type="primary", use_container_width=True)
     if submitted:
-        st.session_state["quick_registration_submit_pending"] = True
-        st.rerun()
+        quick_sid_value = str(st.session_state.get("quick_sid_numeric", ""))
+        if not quick_sid_value.isdigit() or len(quick_sid_value) != 5:
+            st.error("학번은 숫자만 입력할 수 있으며, 정확히 5자리여야 합니다.")
+        else:
+            st.session_state["quick_registration_submit_pending"] = True
+            st.rerun()
 
     pending = st.session_state.get("pending_participant_duplicate")
     is_pending_participant = bool(pending and pending[0] == clean_event(selected))
@@ -1119,4 +1124,4 @@ elif st.session_state.user_role == 'staff':
                     except OSError: pass
         st.info("중요: Streamlit Cloud의 로컬 파일은 영구 저장소가 아닐 수 있습니다. 장기 보존이 필요하면 외부 데이터베이스나 영구 스토리지를 사용하고 정기적으로 백업 파일을 내려받으세요.")
 
-st.markdown('<div style="text-align:center;color:#a0a8b8;font-size:12px;padding:24px 0 4px;letter-spacing:1px">SONGCHEON EVENT SYSTEM · GLASS UI</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#a0a8b8;font-size:12px;padding:24px 0 4px;letter-spacing:1px">SONGCHEON LIB EVENT SYSTEM · GLASS UI</div>', unsafe_allow_html=True)
