@@ -632,18 +632,31 @@ elif st.session_state.user_role == 'staff':
             else:
                 st.markdown('<div class="glass-card" style="min-height:150px;display:flex;align-items:center"><span class="muted">참여자를 검색하면 행사 참여 이력이 여기에 표시됩니다.</span></div>', unsafe_allow_html=True)
 
-        # 참여자 정보는 행사 등록/이력 아래에 전체 너비로 배치한다.
+        # 참여자 정보는 행사 등록/참여 이력 영역 바로 아래에 하나의 보드로 표시한다.
         st.markdown('<h4 style="margin:1rem 0 .5rem 0">참여자 정보</h4>', unsafe_allow_html=True)
         if selected_student:
-            info_sid = selected_student["student_id"]
-            info_name = selected_student["name"]
-            info_col1, info_col2 = st.columns(2, gap="small")
-            with info_col1:
-                st.markdown(f'<div class="glass-card" style="min-height:90px;padding:14px 18px"><div class="muted" style="font-size:.78rem">학번</div><div style="font-size:1.02rem;font-weight:750;margin-top:3px">{info_sid}</div></div>', unsafe_allow_html=True)
-            with info_col2:
-                st.markdown(f'<div class="glass-card" style="min-height:90px;padding:14px 18px"><div class="muted" style="font-size:.78rem">이름</div><div style="font-size:1.02rem;font-weight:750;margin-top:3px">{info_name}</div></div>', unsafe_allow_html=True)
+            info_sid = html.escape(str(selected_student["student_id"]))
+            info_name = html.escape(str(selected_student["name"]))
+            st.markdown(
+                f"""
+                <div class="glass-card" style="min-height:76px;padding:12px 18px;display:flex;align-items:center;gap:clamp(18px,5vw,64px);flex-wrap:wrap">
+                  <div style="min-width:110px;flex:0 0 auto">
+                    <div class="muted" style="font-size:.76rem">학번</div>
+                    <div style="font-size:.94rem;font-weight:750;margin-top:3px">{info_sid}</div>
+                  </div>
+                  <div style="min-width:110px;flex:0 0 auto">
+                    <div class="muted" style="font-size:.76rem">이름</div>
+                    <div style="font-size:.94rem;font-weight:750;margin-top:3px">{info_name}</div>
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         else:
-            st.markdown('<div class="glass-card" style="min-height:80px;display:flex;align-items:center"><span class="muted">학번과 이름을 검색하면 참여자 정보가 표시됩니다.</span></div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="glass-card" style="min-height:76px;padding:12px 18px;display:flex;align-items:center"><span class="muted">학번과 이름을 검색하면 참여자 정보가 표시됩니다.</span></div>',
+                unsafe_allow_html=True,
+            )
 
         # 등록은 선택된 참여자가 있을 때만 허용한다. 중복 확인 후에도 선택 정보/이력이 유지된다.
         selected_student = st.session_state.get("staff_selected_student")
