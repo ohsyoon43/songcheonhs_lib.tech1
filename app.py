@@ -163,10 +163,7 @@ def clean_event(value):
 
 if 'user_role' not in st.session_state: st.session_state.user_role = None
 if 'staff_info' not in st.session_state: st.session_state.staff_info = None
-
-# Session State Persistence
-if "active_student_info" not in st.session_state:
-    st.session_state.active_student_info = None  # 검색 결과 보관 {student_id, name}
+if "active_student_info" not in st.session_state: st.session_state.active_student_info = None
 
 # ------------------------------------------------------------
 # 메인 랜딩 및 로그인
@@ -239,16 +236,14 @@ elif st.session_state.user_role == 'staff':
     with tab1:
         df_e = db_get_events()
 
-        # =========================================================
-        # PPT 사진과 100% 동일한 좌/우 컬럼 레이아웃 구성
-        # =========================================================
+        # 위젯 생성 전에 안전하게 입력창 세션 상태 초기화 플래그 처리
+        if st.session_state.pop("should_clear_search_inputs", False):
+            st.session_state["in_sid"] = ""
+            st.session_state["in_name"] = ""
+
         col_left, col_right = st.columns([1, 1.6], gap="large")
 
-        # ---------------------------------------------------------
-        # [좌측 컬럼]: 1.참여자정보 -> 2.학번입력 -> 3.이름입력 -> 4.검색/초기화버튼
-        # ---------------------------------------------------------
         with col_left:
-            # [1] 상단: 참여자 정보 (검색 후 여기에 결과 표시)
             active_info = st.session_state.get("active_student_info")
             if active_info:
                 st.markdown(
@@ -271,20 +266,15 @@ elif st.session_state.user_role == 'staff':
                     unsafe_allow_html=True
                 )
 
-            # [2] 학번 입력
             input_sid = st.text_input("학번 입력", key="in_sid", placeholder="학번 5자리 (예: 10101)", max_chars=5)
-            
-            # [3] 이름 입력
             input_name = st.text_input("이름 입력", key="in_name", placeholder="학생 이름")
 
-            # [4] 검색 버튼 & 초기화 버튼 (가로 배치)
             btn_c1, btn_c2 = st.columns(2, gap="small")
             with btn_c1:
                 search_clicked = st.button("검색 버튼", key="btn_search", type="primary", use_container_width=True)
             with btn_c2:
                 clear_clicked = st.button("초기화버튼 (Esc)", key="btn_clear", use_container_width=True)
 
-            # Esc 키 누르면 초기화되도록 연결
             st.components.v1.html("""<script>
             (function(){
               try {
@@ -302,33 +292,24 @@ elif st.session_state.user_role == 'staff':
             })();
             </script>""", height=0)
 
-            # --- 검색 및 초기화 동작 처리 ---
             if search_clicked:
                 valid, _, _, _ = parse_student_id(input_sid)
                 if not valid or not input_name.strip():
                     st.error("올바른 5자리 학번과 이름을 모두 입력해 주세요.")
                 else:
-                    # 검색 정보를 상단 카드로 전달
                     st.session_state.active_student_info = {
                         "student_id": input_sid.strip(),
                         "name": input_name.strip()
                     }
-                    # 입력칸 자동으로 비우기
-                    st.session_state["in_sid"] = ""
-                    st.session_state["in_name"] = ""
+                    st.session_state["should_clear_search_inputs"] = True
                     st.rerun()
 
             if clear_clicked:
                 st.session_state.active_student_info = None
-                st.session_state["in_sid"] = ""
-                st.session_state["in_name"] = ""
+                st.session_state["should_clear_search_inputs"] = True
                 st.rerun()
 
-        # ---------------------------------------------------------
-        # [우측 컬럼]: 1.행사입력 / 날짜시간선택 / 등록버튼 -> 2.행사 참여 이력
-        # ---------------------------------------------------------
         with col_right:
-            # [1] 상단 컨트롤: [행사 입력] [날짜 시간 선택 입력] [등록 버튼(enter키)]
             rc1, rc2, rc3 = st.columns([1.5, 1.4, 1.1], gap="small")
             with rc1:
                 selected_event = st.selectbox("행사 입력", event_options(df_e), key="r_event")
@@ -339,13 +320,12 @@ elif st.session_state.user_role == 'staff':
                 with dt_c2:
                     ctime = st.time_input("시간", value=now_seoul().time().replace(tzinfo=None, microsecond=0), key="r_time")
             with rc3:
-                st.write("") # 버튼 수직 정렬용 여백
+                st.write("")
                 st.write("")
                 register_clicked = st.button("등록 버튼 (enter키)", key="r_submit", type="primary", use_container_width=True)
 
-            st.write("") # 간격 조절
+            st.write("")
 
-            # [2] 하단: 행사 참여 이력 (PPT 와이어프레임과 동일하게 이력 표 위치)
             st.markdown('<h4 style="margin:0 0 8px 0;">행사 참여 이력</h4>', unsafe_allow_html=True)
             
             active_info = st.session_state.get("active_student_info")
@@ -374,7 +354,6 @@ elif st.session_state.user_role == 'staff':
                     unsafe_allow_html=True
                 )
 
-            # --- 행사 등록 동작 처리 ---
             if register_clicked:
                 if not active_info:
                     st.warning("먼저 좌측에서 학생을 검색해 참여자 정보를 입력해 주세요.")
@@ -399,14 +378,10 @@ elif st.session_state.user_role == 'staff':
                         "operator": st.session_state.staff_info
                     })
                     db_add_log("참여자 등록", f"[{event}] {sid_target} {name_target} 등록 완료", st.session_state.staff_info)
-                    
-                    # 상단 작게 초록색 팝업 알림 (토스트)
                     st.toast(f"✅ {name_target} 학생의 {event} 등록이 완료되었습니다!", icon="🎉")
                     st.rerun()
 
         st.divider()
-
-        # 하단 전체 기록 관리
         st.markdown('<h3>전체 참여 기록 관리</h3>', unsafe_allow_html=True)
         all_records = db_get_participants()
         if not all_records.empty:
