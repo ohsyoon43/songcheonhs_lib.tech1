@@ -243,7 +243,75 @@ h1,h2,h3,h4 { color:#20232b; letter-spacing:-.65px; }
 .stMetric { background:rgba(255,255,255,.78); border:1px solid rgba(255,255,255,.95); border-radius:20px; padding:18px 20px; box-shadow:0 10px 26px rgba(51,65,97,.06); }
 @media (max-width: 760px) { .block-container { padding-left:.65rem !important; padding-right:.65rem !important; padding-top:.65rem; } .brandbar { padding:15px 17px; border-radius:20px; align-items:flex-start; flex-direction:column; } .hero-card { padding:28px 19px; } .glass-card { padding:19px; } .section-title { font-size:24px; } [data-testid="stTabs"] [data-baseweb="tab-list"] { flex-wrap:wrap; } [data-testid="stDataFrame"] { max-width:100%; } [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) { display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important; grid-auto-flow:row !important; column-gap:3px !important; row-gap:3px !important; align-items:stretch !important; width:100% !important; max-width:100% !important; margin-left:0 !important; margin-right:0 !important; } [data-testid="stHorizontalBlock"]:has([data-testid="stMetric"]) > [data-testid="column"] { min-width:0 !important; width:auto !important; max-width:none !important; flex:none !important; padding:0 !important; margin:0 !important; } [data-testid="stMetric"] { box-sizing:border-box !important; min-width:0 !important; width:100% !important; max-width:none !important; aspect-ratio:auto !important; min-height:82px !important; padding:9px 3px !important; margin:0 !important; border-radius:11px !important; box-shadow:0 3px 10px rgba(51,65,97,.05) !important; display:flex !important; flex-direction:column !important; justify-content:center !important; overflow:hidden !important; } [data-testid="stMetricLabel"] { font-size:clamp(9px, 2.9vw, 11px) !important; line-height:1.25 !important; font-weight:650 !important; white-space:nowrap !important; overflow:visible !important; text-overflow:clip !important; word-break:keep-all !important; letter-spacing:-.35px !important; } [data-testid="stMetricValue"] { font-size:clamp(13px, 3.8vw, 16px) !important; line-height:1.25 !important; font-weight:800 !important; white-space:nowrap !important; overflow:visible !important; text-overflow:clip !important; letter-spacing:-.4px !important; } [data-testid="stMetricValue"] > div { font-weight:800 !important; } [data-testid="stMetricDelta"] { font-size:9px !important; } }
 @media (hover: none) and (pointer: coarse) { .stButton > button, .stDownloadButton > button { min-height:52px; } [data-testid="stTextInput"] input { min-height:58px !important; font-size:18px !important; } }
+/* Consistent responsive behavior for iOS Safari, Android browsers, and desktop */
+*, *::before, *::after { box-sizing:border-box; }
+img, video, iframe { max-width:100%; }
+[data-testid="stAppViewContainer"] { overflow-x:hidden; }
+[data-testid="stHorizontalBlock"] { max-width:100%; }
+[data-testid="stButton"] button, [data-testid="stDownloadButton"] button { touch-action:manipulation; }
+@supports (-webkit-touch-callout: none) { input, textarea, select { font-size:16px !important; } }
+@media (max-width:760px) {
+  .block-container { width:100% !important; max-width:100% !important; padding-left:1rem !important; padding-right:1rem !important; }
+  .section-title { overflow-wrap:anywhere; }
+  [data-testid="stHorizontalBlock"] { gap:.5rem !important; }
+  [data-testid="stTabs"] [data-baseweb="tab-list"] { overflow-x:auto !important; flex-wrap:nowrap !important; scrollbar-width:thin; }
+  [data-testid="stTabs"] button[role="tab"] { flex:0 0 auto; white-space:nowrap; }
+}
 </style>''', unsafe_allow_html=True)
+
+# 접근성·기기 호환 설정: Streamlit 위젯 기반 테마 전환
+if "dark_mode" not in st.session_state:
+    st.session_state.dark_mode = False
+
+theme_spacer, theme_control = st.columns([7, 1.5], gap="small")
+with theme_control:
+    st.toggle("🌙 다크 모드", key="dark_mode", help="밝은 화면과 어두운 화면을 전환합니다.")
+
+if st.session_state.dark_mode:
+    st.markdown(r'''<style>
+    :root { color-scheme: dark; --ink:#edf2fa; --muted:#a8b3c5; --line:rgba(170,185,210,.20); }
+    html, body, [data-testid="stAppViewContainer"], .stApp {
+      color:#edf2fa !important;
+      background:radial-gradient(ellipse at 15% 28%,rgba(52,75,135,.20),transparent 34%),
+                 radial-gradient(ellipse at 82% 42%,rgba(38,83,132,.18),transparent 34%),
+                 linear-gradient(135deg,#111722 0%,#151c28 48%,#101722 100%) !important;
+    }
+    [data-testid="stHeader"] { background:rgba(17,23,34,.88) !important; }
+    [data-testid="stAppViewContainer"] section, [data-testid="stMain"] { color:#edf2fa !important; }
+    .brandbar,.hero-card,.glass-card,[data-testid="stExpander"],
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+      background:rgba(31,41,57,.90) !important; border-color:rgba(170,185,210,.18) !important;
+      box-shadow:0 12px 34px rgba(0,0,0,.20) !important;
+    }
+    .brandname,.hero-title,.section-title,h1,h2,h3,h4,p,li,label,
+    [data-testid="stWidgetLabel"] p,[data-testid="stMarkdownContainer"] { color:#edf2fa; }
+    .branddesc,.hero-subtitle,.muted { color:#a8b3c5 !important; }
+    .pill { color:#a9caff !important; background:rgba(49,130,246,.16) !important; border-color:rgba(115,164,255,.30) !important; }
+    [data-testid="stTextInput"] input,[data-testid="stNumberInput"] input,
+    [data-testid="stDateInput"] input,[data-testid="stTimeInput"] input,
+    [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+    [data-testid="stMultiSelect"] [data-baseweb="select"] > div,
+    [data-testid="stTextArea"] textarea {
+      color:#edf2fa !important; background:#202a3a !important; border-color:#3a4960 !important;
+      -webkit-text-fill-color:#edf2fa !important;
+    }
+    input::placeholder,textarea::placeholder { color:#a8b3c5 !important; -webkit-text-fill-color:#a8b3c5 !important; }
+    [data-testid="stTabs"] button[role="tab"] { color:#c1cada !important; }
+    [data-testid="stTabs"] button[role="tab"][aria-selected="true"] { background:#29374b !important; color:#a9caff !important; }
+    [data-testid="stMetric"] { background:#202a3a !important; border-color:#354258 !important; }
+    [data-testid="stMetricLabel"],[data-testid="stMetricValue"],[data-testid="stMetricDelta"] { color:#edf2fa !important; }
+    [data-testid="stDataFrame"],[data-testid="stTable"] { border-color:#354258 !important; }
+    [data-testid="stAlert"] p,[data-testid="stExpander"] summary,[data-testid="stExpander"] summary p { color:#edf2fa !important; }
+    [data-baseweb="popover"] > div,[data-baseweb="menu"] { background:#202a3a !important; }
+    [role="option"],[role="listbox"] { color:#edf2fa !important; }
+    hr { border-color:rgba(170,185,210,.20) !important; } a { color:#8dbaff !important; }
+    @media (max-width:760px) {
+      .block-container { padding-left:1rem !important; padding-right:1rem !important; }
+      .brandbar,.hero-card,.glass-card { border-radius:18px !important; }
+      [data-testid="stTabs"] [data-baseweb="tab-list"] { gap:4px !important; }
+      [data-testid="stTabs"] button[role="tab"] { padding:9px 10px !important; }
+    }
+    </style>''', unsafe_allow_html=True)
 
 st.markdown('''<div class="brandbar"><div class="brandname">Songcheon <span style="color:#3182F6">Lib Tech</span></div><div class="branddesc">인천송천고등학교 · 행사 관리 시스템</div></div>''', unsafe_allow_html=True)
 
