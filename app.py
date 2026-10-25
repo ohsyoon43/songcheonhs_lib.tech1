@@ -11,7 +11,7 @@ import os
 # ------------------------------------------------------------
 # Page configuration
 # ------------------------------------------------------------
-st.set_page_config(page_title="송천고 도서관 행사 관리 시스템", page_icon="📚", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="송천고 행사 관리 시스템", page_icon="📚", layout="wide", initial_sidebar_state="collapsed")
 SEOUL = ZoneInfo("Asia/Seoul")
 def now_seoul():
     return datetime.now(SEOUL)
@@ -62,6 +62,23 @@ def read_table(query):
 def db_get_events(): return read_table("SELECT * FROM events ORDER BY id DESC")
 def db_get_participants(): return read_table("SELECT * FROM participants ORDER BY id DESC")
 def db_get_logs(): return read_table("SELECT * FROM logs ORDER BY id DESC")
+
+def split_timestamp_columns(df, timestamp_col="timestamp", date_label="날짜", time_label="시간"):
+    """화면/엑셀 표시용으로 timestamp를 날짜와 시간 열로 나눈다. 원본 데이터는 변경하지 않는다."""
+    if df.empty or timestamp_col not in df.columns:
+        return df.copy()
+    result = df.copy()
+    parsed = pd.to_datetime(result[timestamp_col], errors="coerce")
+    result[date_label] = parsed.dt.strftime("%Y-%m-%d").fillna("")
+    result[time_label] = parsed.dt.strftime("%H:%M:%S").fillna("")
+    # 날짜/시간 열을 timestamp가 있던 위치에 배치
+    cols = list(result.columns)
+    idx = cols.index(timestamp_col)
+    cols.remove(timestamp_col)
+    cols.remove(date_label)
+    cols.remove(time_label)
+    cols[idx:idx] = [date_label, time_label]
+    return result[cols]
 
 def db_add_event(name, status, created_at, event_type="기타", description=""):
     with get_db_connection() as conn:
@@ -754,7 +771,8 @@ elif st.session_state.user_role == 'staff':
                 history = df_p[df_p["student_id"].astype(str).str.strip() == history_id] if not df_p.empty else pd.DataFrame()
                 if not history.empty:
                     st.success(f"학번 {history_id}의 참여 이력 {len(history)}건")
-                    st.dataframe(history[["event_name", "timestamp", "operator"]].rename(columns={"event_name":"행사명", "timestamp":"참여 일시", "operator":"등록자"}), use_container_width=True, hide_index=True)
+                    history_display = split_timestamp_columns(history[["event_name", "timestamp", "operator"]], date_label="참여 날짜", time_label="참여 시간").rename(columns={"event_name":"행사명", "operator":"등록자"})
+                    st.dataframe(history_display, use_container_width=True, hide_index=True)
                 else:
                     st.info("일치하는 참여 이력이 없습니다.")
         st.divider()
@@ -783,7 +801,8 @@ elif st.session_state.user_role == 'staff':
             if record_view.empty:
                 st.info("조건에 맞는 기록이 없습니다.")
             else:
-                st.dataframe(record_view[["id", "event_name", "student_id", "name", "timestamp", "operator"]], use_container_width=True, hide_index=True)
+                record_display = split_timestamp_columns(record_view[["id", "event_name", "student_id", "name", "timestamp", "operator"]], date_label="날짜", time_label="시간")
+                st.dataframe(record_display, use_container_width=True, hide_index=True)
                 record_labels = {f"#{int(row['id'])} · {row['event_name']} · {row['student_id']} {row['name']} · {row['timestamp']}": int(row['id']) for _, row in record_view.iterrows()}
                 selected_record_labels = st.multiselect("삭제할 기록 선택", list(record_labels.keys()), key="bulk_delete_records", placeholder="삭제할 기록을 선택하세요")
                 confirm_bulk_delete = st.checkbox("선택한 기록을 삭제하고 복구 보관함으로 이동하는 것에 동의합니다.", key="confirm_bulk_delete_records", disabled=not selected_record_labels)
@@ -867,7 +886,7 @@ elif st.session_state.user_role == 'staff':
                                 db_add_log("행사 정보 수정", f"행사 [{old_name}] 정보 수정" + (f" → [{edited_name.strip()}]" if old_name != edited_name.strip() else ""), st.session_state.staff_info)
                                 st.success("행사 정보가 수정되었습니다.")
                                 st.rerun()
-                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔴  마감")
+                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔴 마감")
                     label = "마감하기" if ev['status'] == "진행 중" else "재개하기"
                     if action_col.button(label, key=f"toggle_{ev['id']}"):
                         new_status = "마감" if ev['status'] == "진행 중" else "진행 중"
@@ -960,10 +979,10 @@ elif st.session_state.user_role == 'staff':
                         st.bar_chart(class_counts.set_index("학급")[["참여 건수", "참여 학생 수"]], use_container_width=True)
                         st.dataframe(class_counts, use_container_width=True, hide_index=True)
                     st.markdown("#### 필터 적용 기록")
-                    st.dataframe(filtered, use_container_width=True, hide_index=True)
+                    st.dataframe(split_timestamp_columns(filtered), use_container_width=True, hide_index=True)
                     output = BytesIO()
                     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                        filtered.to_excel(writer, sheet_name="필터 적용 기록", index=False)
+                        split_timestamp_columns(filtered).to_excel(writer, sheet_name="필터 적용 기록", index=False)
                         event_counts.to_excel(writer, sheet_name="행사별 통계", index=False)
                         grade_counts.to_excel(writer, sheet_name="학년별 통계", index=False)
                         class_counts.to_excel(writer, sheet_name="학급별 통계", index=False)
@@ -997,7 +1016,7 @@ elif st.session_state.user_role == 'staff':
             if date_from: shown = shown[shown["timestamp"].astype(str).str[:10] >= date_from.strftime("%Y-%m-%d")]
             if date_to: shown = shown[shown["timestamp"].astype(str).str[:10] <= date_to.strftime("%Y-%m-%d")]
             st.caption(f"필터 결과 {len(shown):,}건 / 전체 {len(logs):,}건")
-            st.dataframe(shown, use_container_width=True, hide_index=True)
+            st.dataframe(split_timestamp_columns(shown), use_container_width=True, hide_index=True)
             options = {f"#{int(row['id'])} · {row['timestamp']} · {row['category']} · {row['detail'][:45]}": int(row['id']) for _, row in shown.iterrows()}
             with st.expander("선택한 처리 이력 삭제"):
                 if options:
