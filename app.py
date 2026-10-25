@@ -320,6 +320,47 @@ hr { border-color:#e5e5ea !important; }
 @media(max-width:760px){.brandbar{border-radius:16px !important}.hero-card,.glass-card{border-radius:18px !important}}
 </style>''', unsafe_allow_html=True)
 
+# 학번 입력 필드 모바일 숫자패드 및 PC 문자 입력 제한 스크립트 추가
+st.markdown(r'''
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    function setupStudentIdInputs() {
+        const inputs = document.querySelectorAll('input[placeholder="예: 10101"], input[aria-label*="학번"]');
+        inputs.forEach(input => {
+            if (input.dataset.sidConfigured) return;
+            input.dataset.sidConfigured = "true";
+            input.setAttribute('inputmode', 'numeric');
+            input.setAttribute('pattern', '[0-9]*');
+            input.setAttribute('maxlength', '5');
+            
+            input.addEventListener('input', function(e) {
+                let val = this.value.replace(/[^0-9]/g, '');
+                if (val.length > 5) {
+                    val = val.slice(0, 5);
+                }
+                if (this.value !== val) {
+                    this.value = val;
+                    this.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+
+            input.addEventListener('keydown', function(e) {
+                const allowedKeys = ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Home', 'End', 'Enter'];
+                if (allowedKeys.includes(e.key) || (e.ctrlKey || e.metaKey)) {
+                    return;
+                }
+                if (!/^[0-9]$/.test(e.key)) {
+                    e.preventDefault();
+                }
+            });
+        });
+    }
+    setupStudentIdInputs();
+    setInterval(setupStudentIdInputs, 500);
+});
+</script>
+''', unsafe_allow_html=True)
+
 # 접근성·기기 호환 설정: Streamlit 위젯 기반 테마 전환
 if "dark_mode" not in st.session_state:
     st.session_state.dark_mode = False
@@ -422,7 +463,6 @@ def find_student_name(student_id):
 def fill_participant_name():
     sid = st.session_state.get("participant_sid", "").strip()
     matched_name = find_student_name(sid) if len(sid) == 5 and sid.isdigit() else ""
-    # 학번이 바뀌었는데 이전 학생 이름이 남아 잘못 등록되는 것을 방지
     st.session_state["participant_name"] = matched_name
 
 def desktop_quick_sid_changed():
@@ -451,15 +491,12 @@ def clean_event(value):
 if 'user_role' not in st.session_state: st.session_state.user_role = None
 if 'staff_info' not in st.session_state: st.session_state.staff_info = None
 
-# Keep the selected role across refreshes with a query parameter.
-# This is convenience persistence only, not an authentication/security mechanism.
 try:
     saved_role = st.query_params.get("role", "")
 except Exception:
     saved_role = ""
 if st.session_state.user_role is None and saved_role in ("staff", "participant"):
     st.session_state.user_role = saved_role
-    # Staff identity is kept in session state only; after a refresh use a generic label.
     if saved_role == "staff" and not st.session_state.staff_info:
         st.session_state.staff_info = "관리자"
 
@@ -558,8 +595,6 @@ elif st.session_state.user_role == 'participant':
     st.session_state.setdefault("quick_sid_input", "")
     st.session_state.setdefault("quick_name_input", "")
 
-    # Handle registration and duplicate-confirm actions before creating input widgets,
-    # so successful registration can safely clear their session-state values.
     if st.session_state.pop("quick_registration_submit_pending", False):
         sid = str(st.session_state.get("quick_sid_input", "")).strip()
         name = str(st.session_state.get("quick_name_input", "")).strip() or "-"
@@ -634,7 +669,6 @@ elif st.session_state.user_role == 'staff':
     with h2:
         if st.button("로그아웃"):
             st.session_state.user_role = None; st.session_state.staff_info = None; clear_persisted_login(); st.rerun()
-    # 관리자 첫 화면에서 핵심 현황을 바로 확인
     overview_p = db_get_participants()
     overview_e = db_get_events()
     today_key = now_seoul().strftime("%Y-%m-%d")
@@ -649,14 +683,12 @@ elif st.session_state.user_role == 'staff':
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["참여 등록", "행사 관리", "통계 대시보드", "처리 이력", "백업/복원"])
 
     with tab1:
-        # 검색 성공 후에는 다음 실행에서 위젯이 생성되기 전에 입력값을 비운다.
         if st.session_state.pop("clear_staff_search_inputs", False):
             st.session_state["staff_search_id"] = ""
             st.session_state["staff_search_name"] = ""
 
         df_p = db_get_participants(); df_e = db_get_events()
 
-        # 검색 결과는 검색 버튼을 눌렀을 때 고정해 우측 이력 영역에 표시
         if "staff_history_search" not in st.session_state:
             st.session_state.staff_history_search = None
 
@@ -671,7 +703,7 @@ elif st.session_state.user_role == 'staff':
             st.markdown('<div class="eyebrow">STUDENT LOOKUP</div><h3>참여자 정보</h3>', unsafe_allow_html=True)
             saved_student = st.session_state.get("staff_history_search")
             if saved_student:
-                st.markdown(f'<div class="glass-card"><b>학번</b>　{saved_student[0]}<br><b>이름</b>　{saved_student[1]}</div>', unsafe_allow_html=True)
+                st.markdown(f'<div class="glass-card"><b>학번</b> {saved_student[0]}<br><b>이름</b> {saved_student[1]}</div>', unsafe_allow_html=True)
             search_id = st.text_input("학번 입력 (5자리)", key="staff_search_id", placeholder="예: 10101", max_chars=5, on_change=fill_staff_student_name)
             search_name = st.text_input("이름 입력", key="staff_search_name", placeholder="학생 이름")
             search_btn_col, reset_btn_col = st.columns(2, gap="small")
@@ -688,14 +720,12 @@ elif st.session_state.user_role == 'staff':
                     st.session_state["clear_staff_search_inputs"] = True
                     st.rerun()
 
-        # 검색 입력칸은 비워도 선택된 학생 정보는 등록 처리에 계속 사용한다.
         selected_student = st.session_state.get("staff_history_search")
         active_search_id = selected_student[0] if selected_student else search_id.strip()
         active_search_name = selected_student[1] if selected_student else search_name.strip()
 
         with right:
             st.markdown('<div class="eyebrow">PARTICIPATION</div><h3>행사 참여 등록</h3>', unsafe_allow_html=True)
-            # 한 행에 행사, 수동 지정 일시, 등록 버튼을 배치한다.
             with st.form("staff_participation_registration_form", clear_on_submit=False):
                 event_col, date_col, time_col, submit_col = st.columns([1.45, 1.0, 0.9, 0.85], gap="small", vertical_alignment="bottom")
                 with event_col:
@@ -863,7 +893,7 @@ elif st.session_state.user_role == 'staff':
                                 db_add_log("행사 정보 수정", f"행사 [{old_name}] 정보 수정" + (f" → [{edited_name.strip()}]" if old_name != edited_name.strip() else ""), st.session_state.staff_info)
                                 st.success("행사 정보가 수정되었습니다.")
                                 st.rerun()
-                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔴 마감")
+                    status_col.markdown("🟢 진행 중" if ev['status'] == "진행 중" else "🔒 마감")
                     label = "마감하기" if ev['status'] == "진행 중" else "재개하기"
                     if action_col.button(label, key=f"toggle_{ev['id']}"):
                         new_status = "마감" if ev['status'] == "진행 중" else "진행 중"
@@ -885,7 +915,6 @@ elif st.session_state.user_role == 'staff':
         if df_all.empty:
             st.info("통계를 표시할 참여 기록이 없습니다.")
         else:
-            # 필터 옵션
             sf1, sf2, sf3, sf4 = st.columns([1.4, 1, 1, 1])
             event_names = sorted(df_all["event_name"].dropna().astype(str).unique().tolist())
             grade_values = sorted(pd.to_numeric(df_all["grade"], errors="coerce").dropna().astype(int).unique().tolist())
@@ -1034,7 +1063,6 @@ elif st.session_state.user_role == 'staff':
     with tab5:
         st.markdown('<div class="eyebrow">DATA MANAGEMENT</div><h3>데이터 백업 및 복원</h3><p class="muted">복원 전에 현재 데이터베이스를 백업하고, 업로드한 파일의 구조를 확인합니다.</p>', unsafe_allow_html=True)
         if DB_PATH.exists():
-            # SQLite backup API로 WAL 상태를 포함한 일관된 백업 스냅샷 생성
             backup_buffer = BytesIO()
             with sqlite3.connect(str(DB_PATH)) as source_conn:
                 with sqlite3.connect(":memory:") as backup_conn:
@@ -1070,7 +1098,6 @@ elif st.session_state.user_role == 'staff':
                     integrity = check_conn.execute("PRAGMA integrity_check").fetchone()[0]
                     if integrity != "ok":
                         raise ValueError("SQLite 무결성 검사에 실패했습니다.")
-                # 안전망: 현재 DB의 별도 스냅샷을 생성한 뒤에만 교체
                 pre_restore_path = DB_PATH.with_name(f"{DB_PATH.stem}_before_restore_{now_seoul().strftime('%Y%m%d_%H%M%S')}{DB_PATH.suffix}")
                 with sqlite3.connect(str(DB_PATH)) as current_conn, sqlite3.connect(str(pre_restore_path)) as save_conn:
                     current_conn.backup(save_conn)
