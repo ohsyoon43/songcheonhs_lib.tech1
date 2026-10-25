@@ -11,7 +11,7 @@ import os
 # ------------------------------------------------------------
 # Page configuration
 # ------------------------------------------------------------
-st.set_page_config(page_title="송천고 도서관 행사 관리 시스템", page_icon="📚", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="송천고 행사 관리 시스템", page_icon="📚", layout="wide", initial_sidebar_state="collapsed")
 SEOUL = ZoneInfo("Asia/Seoul")
 def now_seoul():
     return datetime.now(SEOUL)
@@ -289,44 +289,36 @@ img, video, iframe { max-width:100%; }
   [data-testid="stTabs"] [data-baseweb="tab-list"] { overflow-x:auto !important; flex-wrap:nowrap !important; scrollbar-width:thin; }
   [data-testid="stTabs"] button[role="tab"] { flex:0 0 auto; white-space:nowrap; }
 }
-</style>''', unsafe_allow_html=True)
 
-# 학번 입력은 모바일/iPad에서 숫자 키패드를 띄우고, PC에서도 숫자만 입력되도록 제한
-st.markdown(r'''<script>
-(function() {
-  function setNumericStudentInputs() {
-    try {
-      const doc = window.parent.document;
-      doc.querySelectorAll('input').forEach(function(el) {
-        const label = (el.getAttribute('aria-label') || '').toLowerCase();
-        const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
-        const isStudentId = label.includes('학번') || placeholder.includes('숫자 5자리') || placeholder.includes('10101');
-        if (!isStudentId || el.dataset.numericStudentId === '1') return;
-        el.dataset.numericStudentId = '1';
-        el.setAttribute('inputmode', 'numeric');
-        el.setAttribute('pattern', '[0-9]*');
-        el.setAttribute('maxlength', '5');
-        el.setAttribute('autocomplete', 'off');
-        el.addEventListener('beforeinput', function(e) {
-          if (e.data && /[^0-9]/.test(e.data) && e.inputType !== 'deleteContentBackward' && e.inputType !== 'deleteContentForward') e.preventDefault();
-        });
-        el.addEventListener('input', function() {
-          const clean = el.value.replace(/[^0-9]/g, '').slice(0, 5);
-          if (el.value !== clean) {
-            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-            setter.call(el, clean);
-            el.dispatchEvent(new Event('input', {bubbles: true}));
-          }
-        });
-      });
-    } catch (e) {}
-  }
-  setNumericStudentInputs();
-  const doc = window.parent.document;
-  const observer = new MutationObserver(setNumericStudentInputs);
-  observer.observe(doc.body, {childList: true, subtree: true});
-})();
-</script>''', unsafe_allow_html=True)
+/* Apple-inspired visual layer: restrained SF typography, neutral surfaces, crisp controls */
+:root { --ink:#1d1d1f; --muted:#6e6e73; --blue:#0071e3; --blue2:#0066cc; --line:#d2d2d7; }
+html, body, [class*="css"], [data-testid="stAppViewContainer"] { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",Pretendard,sans-serif !important; }
+.stApp { color:#1d1d1f !important; background:#f5f5f7 !important; }
+[data-testid="stHeader"] { background:rgba(245,245,247,.82) !important; backdrop-filter:saturate(180%) blur(20px); }
+.brandbar { border:1px solid rgba(0,0,0,.04) !important; border-radius:20px !important; background:rgba(255,255,255,.86) !important; backdrop-filter:saturate(180%) blur(20px); box-shadow:0 2px 10px rgba(0,0,0,.035) !important; }
+.brandname,.hero-title,.section-title,h1,h2,h3,h4 { color:#1d1d1f !important; letter-spacing:-.55px !important; }
+.brandname { font-weight:750 !important; }
+.branddesc,.hero-subtitle,.muted { color:#6e6e73 !important; }
+.eyebrow { color:#0066cc !important; border-bottom:1px solid #0071e3 !important; letter-spacing:1.4px !important; }
+.hero-card,.glass-card { background:rgba(255,255,255,.96) !important; border:1px solid rgba(0,0,0,.045) !important; border-radius:24px !important; box-shadow:0 3px 14px rgba(0,0,0,.035) !important; backdrop-filter:none !important; }
+.hero-title { font-weight:760 !important; }
+.pill { color:#0066cc !important; background:#f0f7ff !important; border-color:rgba(0,113,227,.13) !important; }
+.stButton > button,.stDownloadButton > button,.stFormSubmitButton > button { background:#0071e3 !important; border:1px solid #0071e3 !important; color:#fff !important; border-radius:12px !important; box-shadow:none !important; font-weight:650 !important; transition:background-color .16s ease,transform .16s ease,box-shadow .16s ease !important; }
+.stButton > button p,.stButton > button span,.stDownloadButton > button p,.stFormSubmitButton > button p,.stFormSubmitButton > button span { color:#fff !important; font-weight:650 !important; }
+.stButton > button:hover,.stDownloadButton > button:hover,.stFormSubmitButton > button:hover { background:#0066cc !important; border-color:#0066cc !important; box-shadow:0 2px 7px rgba(0,113,227,.18) !important; }
+.stButton > button:active,.stDownloadButton > button:active,.stFormSubmitButton > button:active { transform:scale(.99); }
+[data-testid="stTextInput"] input,[data-testid="stNumberInput"] input,[data-testid="stDateInput"] input,[data-testid="stTimeInput"] input,[data-testid="stSelectbox"] [data-baseweb="select"] > div,[data-testid="stMultiSelect"] [data-baseweb="select"] > div { border-radius:12px !important; border-color:#d2d2d7 !important; background:#fff !important; }
+[data-testid="stTextInput"] input:focus,[data-testid="stNumberInput"] input:focus { border-color:#0071e3 !important; box-shadow:0 0 0 3px rgba(0,113,227,.14) !important; }
+label,[data-testid="stWidgetLabel"] p { color:#424245 !important; font-weight:600 !important; }
+[data-testid="stTabs"] [data-baseweb="tab-list"] { gap:5px !important; padding:5px !important; border:1px solid rgba(0,0,0,.04) !important; border-radius:14px !important; background:#e8e8ed !important; }
+[data-testid="stTabs"] button[role="tab"] { border-radius:10px !important; color:#515154 !important; }
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] { background:#fff !important; color:#1d1d1f !important; box-shadow:0 1px 4px rgba(0,0,0,.08) !important; }
+[data-testid="stDataFrame"],[data-testid="stTable"] { border:1px solid #e5e5ea !important; border-radius:14px !important; overflow:hidden; }
+[data-testid="stExpander"] { border:1px solid #e5e5ea !important; border-radius:14px !important; background:#fff !important; }
+.stMetric { background:#fff !important; border:1px solid rgba(0,0,0,.045) !important; border-radius:18px !important; box-shadow:0 2px 10px rgba(0,0,0,.03) !important; }
+hr { border-color:#e5e5ea !important; }
+@media(max-width:760px){.brandbar{border-radius:16px !important}.hero-card,.glass-card{border-radius:18px !important}}
+</style>''', unsafe_allow_html=True)
 
 # 접근성·기기 호환 설정: Streamlit 위젯 기반 테마 전환
 if "dark_mode" not in st.session_state:
@@ -380,28 +372,32 @@ if st.session_state.dark_mode:
       [data-testid="stTabs"] [data-baseweb="tab-list"] { gap:4px !important; }
       [data-testid="stTabs"] button[role="tab"] { padding:9px 10px !important; }
     }
-    </style>''', unsafe_allow_html=True)
+    
+/* Apple-inspired dark appearance */
+:root { color-scheme:dark; --ink:#f5f5f7; --muted:#a1a1a6; --line:#424245; }
+html,body,[data-testid="stAppViewContainer"],.stApp { color:#f5f5f7 !important; background:#000 !important; }
+[data-testid="stHeader"] { background:rgba(0,0,0,.78) !important; backdrop-filter:saturate(180%) blur(20px); }
+.brandbar,.hero-card,.glass-card,[data-testid="stExpander"],[data-testid="stTabs"] [data-baseweb="tab-list"] { background:rgba(28,28,30,.97) !important; border-color:rgba(255,255,255,.09) !important; box-shadow:0 2px 12px rgba(0,0,0,.18) !important; }
+.brandname,.hero-title,.section-title,h1,h2,h3,h4,p,li,label,[data-testid="stWidgetLabel"] p,[data-testid="stMarkdownContainer"] { color:#f5f5f7 !important; }
+.branddesc,.hero-subtitle,.muted { color:#a1a1a6 !important; }
+[data-testid="stTextInput"] input,[data-testid="stNumberInput"] input,[data-testid="stDateInput"] input,[data-testid="stTimeInput"] input,[data-testid="stSelectbox"] [data-baseweb="select"] > div,[data-testid="stMultiSelect"] [data-baseweb="select"] > div,[data-testid="stTextArea"] textarea { color:#f5f5f7 !important; background:#1c1c1e !important; border-color:#48484a !important; -webkit-text-fill-color:#f5f5f7 !important; }
+input::placeholder,textarea::placeholder { color:#a1a1a6 !important; -webkit-text-fill-color:#a1a1a6 !important; }
+label,[data-testid="stWidgetLabel"] p { color:#d1d1d6 !important; }
+.pill { color:#64b5ff !important; background:rgba(0,113,227,.16) !important; border-color:rgba(100,181,255,.2) !important; }
+[data-testid="stTabs"] button[role="tab"] { color:#d1d1d6 !important; }
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] { background:#3a3a3c !important; color:#fff !important; }
+[data-testid="stMetric"] { background:#1c1c1e !important; border-color:#38383a !important; }
+[data-testid="stMetricLabel"],[data-testid="stMetricValue"],[data-testid="stMetricDelta"] { color:#f5f5f7 !important; }
+[data-testid="stDataFrame"],[data-testid="stTable"] { border-color:#38383a !important; }
+[data-testid="stAlert"] p,[data-testid="stExpander"] summary,[data-testid="stExpander"] summary p { color:#f5f5f7 !important; }
+[data-baseweb="popover"] > div,[data-baseweb="menu"] { background:#1c1c1e !important; }
+[role="option"],[role="listbox"] { color:#f5f5f7 !important; }
+hr { border-color:#38383a !important; } a { color:#64b5ff !important; }
+.stButton > button,.stDownloadButton > button,.stFormSubmitButton > button { background:#0071e3 !important; border-color:#0071e3 !important; }
+.stButton > button:hover,.stDownloadButton > button:hover,.stFormSubmitButton > button:hover { background:#2997ff !important; border-color:#2997ff !important; }
+</style>''', unsafe_allow_html=True)
 
-st.markdown('''<div class="brandbar"><div class="brandname">Songcheon <span style="color:#3182F6">Lib</span> <span style="color:#3182F6">Tech</span></div><div class="branddesc">송천고 도서관 행사 관리 시스템</div></div>''', unsafe_allow_html=True)
-
-# Prefer Korean text composition for name fields; numeric ID fields are limited to five characters.
-import streamlit.components.v1 as components
-components.html("""
-<script>
-try {
-  const doc = window.parent.document;
-  doc.documentElement.lang = 'ko';
-  const applyKorean = () => {
-    doc.querySelectorAll('input').forEach((el) => {
-      const label = (el.getAttribute('aria-label') || '') + ' ' + (el.placeholder || '');
-      if (label.includes('이름') || label.includes('선생님')) el.setAttribute('lang', 'ko');
-    });
-  };
-  applyKorean();
-  new MutationObserver(applyKorean).observe(doc.body, {childList:true, subtree:true});
-} catch (e) {}
-</script>
-""", height=0, width=0)
+st.markdown('''<div class="brandbar"><div class="brandname">Songcheon <span style="color:#3182F6">Lib Tech</span></div><div class="branddesc">인천송천고등학교 · 행사 관리 시스템</div></div>''', unsafe_allow_html=True)
 
 def parse_student_id(std_id):
     value = str(std_id).strip()
@@ -441,29 +437,8 @@ def desktop_quick_sid_changed():
 def desktop_quick_name_entered():
     st.session_state["desktop_quick_submit_pending"] = True
 
-def numeric_id_to_string(value):
-    """Convert an integer ID widget value to the existing five-digit ID format."""
-    if value is None or value == "":
-        return ""
-    try:
-        number = int(value)
-    except (TypeError, ValueError):
-        return ""
-    if number < 0 or number > 99999:
-        return ""
-    return str(number)
-
-def sanitize_staff_login_id():
-    raw = str(st.session_state.get("staff_login_student_id", ""))
-    st.session_state["staff_login_student_id"] = "".join(ch for ch in raw if ch.isdigit())[:5]
-
-def sanitize_staff_search_id():
-    raw = str(st.session_state.get("staff_search_id_numeric", ""))
-    st.session_state["staff_search_id_numeric"] = "".join(ch for ch in raw if ch.isdigit())[:5]
-    fill_staff_student_name()
-
 def fill_staff_student_name():
-    sid = numeric_id_to_string(st.session_state.get("staff_search_id_numeric"))
+    sid = st.session_state.get("staff_search_id", "").strip()
     matched_name = find_student_name(sid) if len(sid) == 5 and sid.isdigit() else ""
     if matched_name:
         st.session_state["staff_search_name"] = matched_name
@@ -512,7 +487,7 @@ def clear_persisted_login():
 if st.session_state.user_role is None:
     spacer1, main, spacer2 = st.columns([1, 1.35, 1])
     with main:
-        st.markdown('''<div class="hero-card"><div class="eyebrow">EVENT MANAGEMENT</div><div class="hero-title">인천송천고 도서관</div><p class="hero-subtitle">행사 참여 등록부터 통합 데이터 관리까지<br>한곳에서 간편하게 관리하세요.</p><span class="pill">SONGCHEON LIB EVENT SYSTEM</span></div>''', unsafe_allow_html=True)
+        st.markdown('''<div class="hero-card"><div class="eyebrow">EVENT MANAGEMENT</div><div class="hero-title">인천송천고 도서관</div><p class="hero-subtitle">행사 참여 등록부터 통합 데이터 관리까지<br>한곳에서 간편하게 관리하세요.</p><span class="pill">SONGCHEON EVENT SYSTEM</span></div>''', unsafe_allow_html=True)
         st.write("")
         with st.expander("📘 사용 설명 보기", expanded=False):
             st.markdown("""
@@ -544,7 +519,7 @@ elif st.session_state.user_role == 'staff_login':
         st.markdown('<div class="eyebrow">STAFF LOGIN</div><div class="section-title">관리자 로그인</div><p class="muted">담당자 정보를 입력해 로그인해 주세요.</p>', unsafe_allow_html=True)
         staff_type = st.selectbox("직위 구분", ["도서부원", "사서교사"])
         if staff_type == "도서부원":
-            staff_std_id = st.text_input("학번 (5자리)", max_chars=5, key="staff_login_student_id", placeholder="숫자 5자리", on_change=sanitize_staff_login_id)
+            staff_std_id = st.text_input("학번 (5자리)", placeholder="예: 10101", max_chars=5)
             staff_name = st.text_input("이름", placeholder="이름을 입력하세요")
         else:
             staff_std_id = "교직원"
@@ -580,14 +555,13 @@ elif st.session_state.user_role == 'participant':
 
     df_events = db_get_events()
     selected = st.selectbox("참여할 행사", event_options(df_events), key="participant_event")
-    st.session_state.setdefault("quick_sid_numeric", None)
+    st.session_state.setdefault("quick_sid_input", "")
     st.session_state.setdefault("quick_name_input", "")
 
     # Handle registration and duplicate-confirm actions before creating input widgets,
     # so successful registration can safely clear their session-state values.
     if st.session_state.pop("quick_registration_submit_pending", False):
-        sid_raw = str(st.session_state.get("quick_sid_numeric", ""))
-        sid = sid_raw if sid_raw.isdigit() and len(sid_raw) == 5 else ""
+        sid = str(st.session_state.get("quick_sid_input", "")).strip()
         name = str(st.session_state.get("quick_name_input", "")).strip() or "-"
         valid, grade, class_num, number = parse_student_id(sid)
         if "행사 없음" in selected:
@@ -605,7 +579,7 @@ elif st.session_state.user_role == 'participant':
                 db_add_participant({"event_name":event,"student_id":sid,"grade":grade,"class":class_num,"number":number,"name":name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
                 db_add_log("참여자 등록", f"[{event}] {sid} {name} 등록 완료", "참여자 본인")
                 st.session_state["participant_registration_flash"] = f"학번 {sid} 등록이 완료되었습니다!"
-                st.session_state["quick_sid_numeric"] = None
+                st.session_state["quick_sid_input"] = ""
                 st.session_state["quick_name_input"] = ""
 
     if st.session_state.pop("quick_duplicate_confirm_pending", False):
@@ -618,7 +592,7 @@ elif st.session_state.user_role == 'participant':
             db_add_log("참여자 등록", f"[{event}] {pending_sid} {registered_name} 중복 등록 완료", "참여자 본인")
             st.session_state.pop("pending_participant_duplicate", None)
             st.session_state["participant_registration_flash"] = f"학번 {pending_sid} 등록이 완료되었습니다!"
-            st.session_state["quick_sid_numeric"] = None
+            st.session_state["quick_sid_input"] = ""
             st.session_state["quick_name_input"] = ""
 
     if st.session_state.pop("quick_duplicate_cancel_pending", False):
@@ -626,16 +600,12 @@ elif st.session_state.user_role == 'participant':
 
     st.markdown('<div class="glass-card"><b>참여자 정보</b></div>', unsafe_allow_html=True)
     with st.form("participant_quick_registration_form", clear_on_submit=False):
-        st.text_input("학번 (5자리)", max_chars=5, placeholder="숫자 5자리", key="quick_sid_numeric")
+        st.text_input("학번 (5자리)", max_chars=5, placeholder="예: 10101", key="quick_sid_input")
         st.text_input("이름 (선택)", placeholder="이름을 입력하세요. 비워 두면 - 로 등록됩니다.", key="quick_name_input")
         submitted = st.form_submit_button("등록", type="primary", use_container_width=True)
     if submitted:
-        quick_sid_value = str(st.session_state.get("quick_sid_numeric", ""))
-        if not quick_sid_value.isdigit() or len(quick_sid_value) != 5:
-            st.error("학번은 숫자만 입력할 수 있으며, 정확히 5자리여야 합니다.")
-        else:
-            st.session_state["quick_registration_submit_pending"] = True
-            st.rerun()
+        st.session_state["quick_registration_submit_pending"] = True
+        st.rerun()
 
     pending = st.session_state.get("pending_participant_duplicate")
     is_pending_participant = bool(pending and pending[0] == clean_event(selected))
@@ -681,7 +651,7 @@ elif st.session_state.user_role == 'staff':
     with tab1:
         # 검색 성공 후에는 다음 실행에서 위젯이 생성되기 전에 입력값을 비운다.
         if st.session_state.pop("clear_staff_search_inputs", False):
-            st.session_state["staff_search_id_numeric"] = None
+            st.session_state["staff_search_id"] = ""
             st.session_state["staff_search_name"] = ""
 
         df_p = db_get_participants(); df_e = db_get_events()
@@ -691,7 +661,7 @@ elif st.session_state.user_role == 'staff':
             st.session_state.staff_history_search = None
 
         def reset_staff_student_search():
-            st.session_state["staff_search_id_numeric"] = None
+            st.session_state["staff_search_id"] = ""
             st.session_state["staff_search_name"] = ""
             st.session_state["staff_history_search"] = None
             st.session_state.pop("pending_admin_duplicate", None)
@@ -702,7 +672,7 @@ elif st.session_state.user_role == 'staff':
             saved_student = st.session_state.get("staff_history_search")
             if saved_student:
                 st.markdown(f'<div class="glass-card"><b>학번</b>　{saved_student[0]}<br><b>이름</b>　{saved_student[1]}</div>', unsafe_allow_html=True)
-            search_id = st.text_input("학번 입력 (5자리)", max_chars=5, key="staff_search_id_numeric", placeholder="숫자 5자리", on_change=sanitize_staff_search_id)
+            search_id = st.text_input("학번 입력 (5자리)", key="staff_search_id", placeholder="예: 10101", max_chars=5, on_change=fill_staff_student_name)
             search_name = st.text_input("이름 입력", key="staff_search_name", placeholder="학생 이름")
             search_btn_col, reset_btn_col = st.columns(2, gap="small")
             with search_btn_col:
@@ -710,20 +680,13 @@ elif st.session_state.user_role == 'staff':
             with reset_btn_col:
                 st.button("초기화", key="staff_student_reset_button", use_container_width=True, on_click=reset_staff_student_search)
             if search_clicked:
-                if not search_id.strip():
-                    st.warning("학번을 입력해 주세요.")
+                if not search_id.strip() or not search_name.strip():
+                    st.warning("학번과 이름을 모두 입력해 주세요.")
                     st.session_state.staff_history_search = None
                 else:
-                    valid_search_id, _, _, _ = parse_student_id(search_id.strip())
-                    if not valid_search_id:
-                        st.warning("학번은 숫자 5자리로 입력해 주세요.")
-                        st.session_state.staff_history_search = None
-                    else:
-                        # 이름은 선택 입력이며, 비어 있으면 '-'로 처리한다.
-                        normalized_name = search_name.strip() or "-"
-                        st.session_state.staff_history_search = (search_id.strip(), normalized_name)
-                        st.session_state["clear_staff_search_inputs"] = True
-                        st.rerun()
+                    st.session_state.staff_history_search = (search_id.strip(), search_name.strip())
+                    st.session_state["clear_staff_search_inputs"] = True
+                    st.rerun()
 
         # 검색 입력칸은 비워도 선택된 학생 정보는 등록 처리에 계속 사용한다.
         selected_student = st.session_state.get("staff_history_search")
@@ -764,6 +727,7 @@ elif st.session_state.user_role == 'staff':
                 valid, grade, class_num, number = parse_student_id(active_search_id)
                 if "행사 없음" in selected: st.error("행사를 선택해 주세요.")
                 elif not valid: st.error("왼쪽에서 올바른 5자리 학번을 입력하고 학생 검색을 해 주세요.")
+                elif not active_search_name and not find_student_name(active_search_id): st.error("왼쪽에서 학생을 검색하고 이름을 확인해 주세요.")
                 elif "[마감]" in selected: st.error("마감된 행사입니다. 행사 상태를 확인해 주세요.")
                 else:
                     event = clean_event(selected)
@@ -772,7 +736,7 @@ elif st.session_state.user_role == 'staff':
                         st.session_state["pending_admin_duplicate"] = (event, active_search_id, admin_day.isoformat())
                         st.rerun()
                     else:
-                        registered_name = str(active_search_name or "").strip() or find_student_name(active_search_id) or "-"
+                        registered_name = active_search_name or find_student_name(active_search_id) or "이름 미입력"
                         db_add_participant({"event_name":event,"student_id":active_search_id,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
                         db_add_log("참여자 등록", f"[{event}] {active_search_id} {registered_name} 등록 완료", st.session_state.staff_info)
                         st.session_state.pop("pending_admin_duplicate", None)
@@ -783,9 +747,9 @@ elif st.session_state.user_role == 'staff':
             history_search = st.session_state.get("staff_history_search")
             if history_search:
                 history_id, history_name = history_search
-                history = df_p[df_p["student_id"].astype(str).str.strip() == history_id] if not df_p.empty else pd.DataFrame()
+                history = df_p[(df_p["student_id"].astype(str).str.strip() == history_id) & (df_p["name"].astype(str).str.strip() == history_name)] if not df_p.empty else pd.DataFrame()
                 if not history.empty:
-                    st.success(f"학번 {history_id}의 참여 이력 {len(history)}건")
+                    st.success(f"학번과 이름이 모두 일치합니다 · 참여 이력 {len(history)}건")
                     st.dataframe(history[["event_name", "timestamp", "operator"]].rename(columns={"event_name":"행사명", "timestamp":"참여 일시", "operator":"등록자"}), use_container_width=True, hide_index=True)
                 else:
                     st.info("일치하는 참여 이력이 없습니다.")
@@ -1124,4 +1088,4 @@ elif st.session_state.user_role == 'staff':
                     except OSError: pass
         st.info("중요: Streamlit Cloud의 로컬 파일은 영구 저장소가 아닐 수 있습니다. 장기 보존이 필요하면 외부 데이터베이스나 영구 스토리지를 사용하고 정기적으로 백업 파일을 내려받으세요.")
 
-st.markdown('<div style="text-align:center;color:#a0a8b8;font-size:12px;padding:24px 0 4px;letter-spacing:1px">SONGCHEON LIB EVENT SYSTEM · GLASS UI</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#a0a8b8;font-size:12px;padding:24px 0 4px;letter-spacing:1px">SONGCHEON EVENT SYSTEM · GLASS UI</div>', unsafe_allow_html=True)
