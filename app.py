@@ -1197,3 +1197,4 @@ elif st.session_state.user_role == 'staff':
         st.info("중요: Streamlit Cloud의 로컬 파일은 영구 저장소가 아닐 수 있습니다. 장기 보존이 필요하면 외부 데이터베이스나 영구 스토리지를 사용하고 정기적으로 백업 파일을 내려받으세요.")
 
 st.markdown('<div style="text-align:center;color:#a0a8b8;font-size:12px;padding:24px 0 4px;letter-spacing:1px">SONGCHEON EVENT SYSTEM · GLASS UI</div>', unsafe_allow_html=True)
+
