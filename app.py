@@ -7,11 +7,12 @@ import sqlite3
 from pathlib import Path
 import tempfile
 import os
+import json
 
 # ------------------------------------------------------------
 # Page configuration
 # ------------------------------------------------------------
-st.set_page_config(page_title="송천고 도서관 행사 관리 시스템", page_icon="📚", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="송천고 행사 관리 시스템", page_icon="📚", layout="wide", initial_sidebar_state="collapsed")
 SEOUL = ZoneInfo("Asia/Seoul")
 def now_seoul():
     return datetime.now(SEOUL)
@@ -54,6 +55,14 @@ def init_db():
             cur.execute("ALTER TABLE events ADD COLUMN event_type TEXT NOT NULL DEFAULT '기타'")
         if 'description' not in event_cols:
             cur.execute("ALTER TABLE events ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+        if 'type_names' not in event_cols:
+            cur.execute("ALTER TABLE events ADD COLUMN type_names TEXT NOT NULL DEFAULT '[]'")
+        participant_cols = {row[1] for row in cur.execute("PRAGMA table_info(participants)").fetchall()}
+        if 'participant_type' not in participant_cols:
+            cur.execute("ALTER TABLE participants ADD COLUMN participant_type TEXT NOT NULL DEFAULT '미지정'")
+        deleted_cols = {row[1] for row in cur.execute("PRAGMA table_info(deleted_participants)").fetchall()}
+        if 'participant_type' not in deleted_cols:
+            cur.execute("ALTER TABLE deleted_participants ADD COLUMN participant_type TEXT NOT NULL DEFAULT '미지정'")
 
 def read_table(query):
     with get_db_connection() as conn:
@@ -61,6 +70,23 @@ def read_table(query):
 
 def db_get_events(): return read_table("SELECT * FROM events ORDER BY id DESC")
 def db_get_participants(): return read_table("SELECT * FROM participants ORDER BY id DESC")
+def parse_type_names(value):
+    try:
+        names = json.loads(value or '[]')
+        if isinstance(names, list):
+            cleaned = [str(x).strip() for x in names if str(x).strip()]
+            return cleaned
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    return []
+def get_event_type_names(event_name):
+    with get_db_connection() as conn:
+        row = conn.execute("SELECT type_names FROM events WHERE name=? ORDER BY id DESC LIMIT 1", (str(event_name),)).fetchone()
+    names = parse_type_names(row[0]) if row else []
+    return names or ['미지정']
+def db_duplicate_records(event_name, student_id):
+    with get_db_connection() as conn:
+        return conn.execute("SELECT participant_type, timestamp, name, operator FROM participants WHERE event_name=? AND student_id=? ORDER BY id DESC", (str(event_name).strip(), str(student_id).strip())).fetchall()
 def db_get_logs(): return read_table("SELECT * FROM logs ORDER BY id DESC")
 
 def split_timestamp_columns(df, timestamp_col="timestamp", date_label="날짜", time_label="시간"):
@@ -82,6 +108,7 @@ def split_timestamp_columns(df, timestamp_col="timestamp", date_label="날짜", 
     # 내부 데이터베이스 필드명은 유지하고, 표/엑셀에 표시할 제목만 한국어로 바꾼다.
     korean_headers = {
         "event_name": "행사명",
+        "participant_type": "행사 유형",
         "student_id": "학번",
         "grade": "학년",
         "class": "반",
@@ -94,20 +121,20 @@ def split_timestamp_columns(df, timestamp_col="timestamp", date_label="날짜", 
     }
     return result.rename(columns=korean_headers)
 
-def db_add_event(name, status, created_at, event_type="기타", description=""):
+def db_add_event(name, status, created_at, event_type="기타", description="", type_names=None):
     with get_db_connection() as conn:
-        conn.execute("INSERT INTO events (name,status,created_at,event_type,description) VALUES (?,?,?,?,?)", (name,status,created_at,event_type,description))
+        conn.execute("INSERT INTO events (name,status,created_at,event_type,description,type_names) VALUES (?,?,?,?,?,?)", (name,status,created_at,event_type,description,json.dumps(type_names or [], ensure_ascii=False)))
 
 def db_update_event_status(event_id, new_status):
     with get_db_connection() as conn:
         conn.execute("UPDATE events SET status=? WHERE id=?", (new_status,event_id))
 
-def db_update_event_details(event_id, old_name, new_name, event_type, description):
+def db_update_event_details(event_id, old_name, new_name, event_type, description, type_names=None):
     """행사 정보를 수정하고, 행사명 변경 시 연결된 참여/보관 기록도 함께 갱신한다."""
     with get_db_connection() as conn:
         conn.execute(
-            "UPDATE events SET name=?, event_type=?, description=? WHERE id=?",
-            (new_name, event_type, description, event_id),
+            "UPDATE events SET name=?, event_type=?, description=?, type_names=? WHERE id=?",
+            (new_name, event_type, description, json.dumps(type_names or [], ensure_ascii=False), event_id),
         )
         if old_name != new_name:
             conn.execute("UPDATE participants SET event_name=? WHERE event_name=?", (new_name, old_name))
@@ -126,8 +153,8 @@ def db_delete_event_and_records(event_id, event_name, deleted_by="관리자"):
 def db_add_participant(data):
     with get_db_connection() as conn:
         conn.execute('''INSERT INTO participants
-            (event_name,student_id,grade,class,number,name,timestamp,operator)
-            VALUES (?,?,?,?,?,?,?,?)''', (data['event_name'],data['student_id'],data['grade'],data['class'],data['number'],data['name'],data['timestamp'],data['operator']))
+            (event_name,student_id,grade,class,number,name,timestamp,operator,participant_type)
+            VALUES (?,?,?,?,?,?,?,?,?)''', (data['event_name'],data['student_id'],data['grade'],data['class'],data['number'],data['name'],data['timestamp'],data['operator'],data.get('participant_type','미지정'))) 
 
 def db_participant_exists(event_name, student_id, exclude_id=None):
     """기존 호환용: 행사와 학번이 일치하는 참여 기록이 있는지 확인한다."""
@@ -159,12 +186,12 @@ def db_archive_and_delete_participants(part_ids, deleted_by):
     deleted_at = now_seoul().strftime("%Y-%m-%d %H:%M:%S")
     with get_db_connection() as conn:
         rows = conn.execute(
-            f"SELECT id,event_name,student_id,grade,class,number,name,timestamp,operator FROM participants WHERE id IN ({placeholders})",
+            f"SELECT id,event_name,student_id,grade,class,number,name,timestamp,operator,participant_type FROM participants WHERE id IN ({placeholders})",
             ids,
         ).fetchall()
         conn.executemany("""INSERT INTO deleted_participants
-            (original_id,event_name,student_id,grade,class,number,name,timestamp,operator,deleted_at,deleted_by)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (original_id,event_name,student_id,grade,class,number,name,timestamp,operator,participant_type,deleted_at,deleted_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             [(r[0], *r[1:], deleted_at, deleted_by) for r in rows])
         conn.executemany("DELETE FROM participants WHERE id=?", [(r[0],) for r in rows])
     return len(rows)
@@ -174,9 +201,9 @@ def db_restore_archived_participant(archive_id, restored_by):
         row = conn.execute("SELECT * FROM deleted_participants WHERE archive_id=?", (int(archive_id),)).fetchone()
         if row is None:
             return False, "복구할 기록을 찾을 수 없습니다."
-        # row: archive_id, original_id, event_name, student_id, grade, class, number, name, timestamp, operator, deleted_at, deleted_by
-        conn.execute("""INSERT INTO participants (event_name,student_id,grade,class,number,name,timestamp,operator)
-            VALUES (?,?,?,?,?,?,?,?)""", (row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9]))
+        # row: archive_id, original_id, event_name, student_id, grade, class, number, name, timestamp, operator, deleted_at, deleted_by, participant_type
+        conn.execute("""INSERT INTO participants (event_name,student_id,grade,class,number,name,timestamp,operator,participant_type)
+            VALUES (?,?,?,?,?,?,?,?,?)""", (row[2],row[3],row[4],row[5],row[6],row[7],row[8],row[9],row[12] if len(row) > 12 else "미지정"))
         conn.execute("DELETE FROM deleted_participants WHERE archive_id=?", (int(archive_id),))
     db_add_log("참여 기록 복구", f"보관 기록 #{archive_id} 복구 완료", restored_by)
     return True, "기록을 복구했습니다."
@@ -586,11 +613,11 @@ elif st.session_state.user_role == 'participant':
     st.session_state.setdefault("quick_sid_numeric", None)
     st.session_state.setdefault("quick_name_input", "")
 
-    # Handle registration and duplicate-confirm actions before creating input widgets,
-    # so successful registration can safely clear their session-state values.
+    # 중복 확인 동작은 선택한 행사 전체 기록을 기준으로 처리한다.
     if st.session_state.pop("quick_registration_submit_pending", False):
         sid = numeric_id_to_string(st.session_state.get("quick_sid_numeric"))
         name = str(st.session_state.get("quick_name_input", "")).strip() or "-"
+        ptype = str(st.session_state.get("quick_participant_type", "")).strip()
         valid, grade, class_num, number = parse_student_id(sid)
         if "행사 없음" in selected:
             st.session_state["participant_registration_flash"] = "등록 가능한 행사가 없습니다."
@@ -598,14 +625,16 @@ elif st.session_state.user_role == 'participant':
             st.session_state["participant_registration_flash"] = "마감된 행사입니다. 도서부원에게 문의해 주세요."
         elif not valid:
             st.session_state["participant_registration_flash"] = "학번 5자리를 정확히 입력해 주세요."
+        elif not ptype:
+            st.session_state["participant_registration_flash"] = "참여 유형을 선택해 주세요."
         else:
             event = clean_event(selected)
-            participant_day = now_seoul().date()
-            if db_count_participant_on_date(event, sid, participant_day) > 0:
-                st.session_state["pending_participant_duplicate"] = (event, sid, participant_day.isoformat(), name)
+            existing = db_duplicate_records(event, sid)
+            if existing:
+                st.session_state["pending_participant_duplicate"] = (event, sid, name, ptype)
             else:
-                db_add_participant({"event_name":event,"student_id":sid,"grade":grade,"class":class_num,"number":number,"name":name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
-                db_add_log("참여자 등록", f"[{event}] {sid} {name} 등록 완료", "참여자 본인")
+                db_add_participant({"event_name":event,"student_id":sid,"grade":grade,"class":class_num,"number":number,"name":name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인","participant_type":ptype})
+                db_add_log("참여자 등록", f"[{event} / {ptype}] {sid} {name} 등록 완료", "참여자 본인")
                 st.session_state["participant_registration_flash"] = f"학번 {sid} 등록이 완료되었습니다!"
                 st.session_state["quick_sid_numeric"] = None
                 st.session_state["quick_name_input"] = ""
@@ -613,11 +642,11 @@ elif st.session_state.user_role == 'participant':
     if st.session_state.pop("quick_duplicate_confirm_pending", False):
         pending = st.session_state.get("pending_participant_duplicate")
         if pending and pending[0] == clean_event(selected):
-            event, pending_sid, pending_day, pending_name = pending
+            event, pending_sid, pending_name, ptype = pending
             valid, grade, class_num, number = parse_student_id(pending_sid)
             registered_name = str(pending_name or "-").strip() or "-"
-            db_add_participant({"event_name":event,"student_id":pending_sid,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인"})
-            db_add_log("참여자 등록", f"[{event}] {pending_sid} {registered_name} 중복 등록 완료", "참여자 본인")
+            db_add_participant({"event_name":event,"student_id":pending_sid,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":now_seoul().strftime("%Y-%m-%d %H:%M:%S"),"operator":"참여자 본인","participant_type":ptype})
+            db_add_log("중복 참여 등록", f"[{event} / {ptype}] {pending_sid} {registered_name} 중복 등록을 사용자 확인 후 허용", "참여자 본인")
             st.session_state.pop("pending_participant_duplicate", None)
             st.session_state["participant_registration_flash"] = f"학번 {pending_sid} 등록이 완료되었습니다!"
             st.session_state["quick_sid_numeric"] = None
@@ -626,8 +655,10 @@ elif st.session_state.user_role == 'participant':
     if st.session_state.pop("quick_duplicate_cancel_pending", False):
         st.session_state.pop("pending_participant_duplicate", None)
 
+    type_names = get_event_type_names(clean_event(selected)) if "행사 없음" not in selected else []
     st.markdown('<div class="glass-card"><b>참여자 정보</b></div>', unsafe_allow_html=True)
     with st.form("participant_quick_registration_form", clear_on_submit=False):
+        st.selectbox("참여 유형 (필수)", type_names, key="quick_participant_type")
         st.number_input("학번 (5자리)", min_value=0, max_value=99999, value=None, step=1, placeholder="숫자 5자리", key="quick_sid_numeric")
         st.text_input("이름 (선택)", placeholder="이름을 입력하세요. 비워 두면 - 로 등록됩니다.", key="quick_name_input")
         submitted = st.form_submit_button("등록", type="primary", use_container_width=True)
@@ -638,7 +669,10 @@ elif st.session_state.user_role == 'participant':
     pending = st.session_state.get("pending_participant_duplicate")
     is_pending_participant = bool(pending and pending[0] == clean_event(selected))
     if is_pending_participant:
-        st.warning("오늘 이 행사에 이미 등록한 기록이 있습니다. 중복 등록하시겠습니까?")
+        existing = db_duplicate_records(pending[0], pending[1])
+        st.warning(f"이 행사에 이미 참여 기록이 {len(existing)}건 있습니다. 중복 등록을 진행할까요?")
+        if existing:
+            st.dataframe(pd.DataFrame(existing, columns=["기존 유형", "참여 시각", "이름", "등록자"]), use_container_width=True, hide_index=True)
         confirm_col, cancel_col = st.columns(2)
         with confirm_col:
             if st.button("네, 중복 등록", key="participant_confirm_duplicate", use_container_width=True, type="primary"):
@@ -733,9 +767,13 @@ elif st.session_state.user_role == 'staff':
             st.markdown('<div class="eyebrow">PARTICIPATION</div><h3>행사 참여 등록</h3>', unsafe_allow_html=True)
             # 한 행에 행사, 수동 지정 일시, 등록 버튼을 배치한다.
             with st.form("staff_participation_registration_form", clear_on_submit=False):
-                event_col, date_col, time_col, submit_col = st.columns([1.45, 1.0, 0.9, 0.85], gap="small", vertical_alignment="bottom")
+                event_col, type_col, date_col, time_col, submit_col = st.columns([1.35, 1.15, 1.0, 0.9, 0.85], gap="small", vertical_alignment="bottom")
                 with event_col:
                     selected = st.selectbox("행사 입력", event_options(df_e), key="staff_event")
+                with type_col:
+                    current_event_for_type = clean_event(selected)
+                    staff_type_names = get_event_type_names(current_event_for_type) if "행사 없음" not in selected else ["미지정"]
+                    participant_type = st.selectbox("참여 유형 (필수)", staff_type_names, key="staff_participant_type")
                 with date_col:
                     cdate = st.date_input("등록 날짜", value=now_seoul().date(), key="retro_date")
                 with time_col:
@@ -744,12 +782,15 @@ elif st.session_state.user_role == 'staff':
                     submit_admin = st.form_submit_button("등록", use_container_width=True, type="primary")
 
             admin_day = cdate
-            pending_admin = (clean_event(selected), active_search_id, admin_day.isoformat())
+            pending_admin = (clean_event(selected), active_search_id, admin_day.isoformat(), participant_type)
             is_pending_admin = st.session_state.get("pending_admin_duplicate") == pending_admin
             confirm_admin = False
             cancel_admin = False
             if is_pending_admin:
-                st.warning("⚠️ 선택한 날짜에 해당 학생의 행사 참여 기록이 이미 있습니다. 중복 등록하시겠습니까?")
+                existing_admin = db_duplicate_records(pending_admin[0], pending_admin[1])
+                st.warning(f"⚠️ 이 행사에 이미 참여 기록이 {len(existing_admin)}건 있습니다. 중복 등록하시겠습니까?")
+                if existing_admin:
+                    st.dataframe(pd.DataFrame(existing_admin, columns=["기존 유형", "참여 시각", "이름", "등록자"]), use_container_width=True, hide_index=True)
                 confirm_col, cancel_col = st.columns(2)
                 with confirm_col:
                     confirm_admin = st.button("네, 중복 등록", key="staff_attendance_confirm_duplicate", use_container_width=True)
@@ -766,14 +807,15 @@ elif st.session_state.user_role == 'staff':
                 elif "[마감]" in selected: st.error("마감된 행사입니다. 행사 상태를 확인해 주세요.")
                 else:
                     event = clean_event(selected)
-                    same_day_count = db_count_participant_on_date(event, active_search_id, admin_day)
-                    if same_day_count > 0 and not confirm_admin:
-                        st.session_state["pending_admin_duplicate"] = (event, active_search_id, admin_day.isoformat())
+                    if not participant_type:
+                        st.error("참여 유형을 선택해 주세요.")
+                    elif db_duplicate_records(event, active_search_id) and not confirm_admin:
+                        st.session_state["pending_admin_duplicate"] = (event, active_search_id, admin_day.isoformat(), participant_type)
                         st.rerun()
                     else:
                         registered_name = str(active_search_name or "").strip() or find_student_name(active_search_id) or "-"
-                        db_add_participant({"event_name":event,"student_id":active_search_id,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info})
-                        db_add_log("참여자 등록", f"[{event}] {active_search_id} {registered_name} 등록 완료", st.session_state.staff_info)
+                        db_add_participant({"event_name":event,"student_id":active_search_id,"grade":grade,"class":class_num,"number":number,"name":registered_name,"timestamp":f"{cdate} {ctime.strftime('%H:%M:%S')}","operator":st.session_state.staff_info,"participant_type":participant_type})
+                        db_add_log("중복 참여 등록" if confirm_admin else "참여자 등록", f"[{event} / {participant_type}] {active_search_id} {registered_name}" + (" 중복 등록을 사용자 확인 후 허용" if confirm_admin else " 등록 완료"), st.session_state.staff_info)
                         st.session_state.pop("pending_admin_duplicate", None)
                         st.success(f"학번 {active_search_id} 참여 등록 완료!")
                         st.rerun()
@@ -785,7 +827,7 @@ elif st.session_state.user_role == 'staff':
                 history = df_p[df_p["student_id"].astype(str).str.strip() == history_id] if not df_p.empty else pd.DataFrame()
                 if not history.empty:
                     st.success(f"학번 {history_id}의 참여 이력 {len(history)}건")
-                    history_display = split_timestamp_columns(history[["event_name", "timestamp", "operator"]], date_label="참여 날짜", time_label="참여 시간").rename(columns={"event_name":"행사명", "operator":"등록자"})
+                    history_display = split_timestamp_columns(history[["event_name", "participant_type", "timestamp", "operator"]], date_label="참여 날짜", time_label="참여 시간").rename(columns={"event_name":"행사명", "participant_type":"행사 유형", "operator":"등록자"})
                     st.dataframe(history_display, use_container_width=True, hide_index=True)
                 else:
                     st.info("일치하는 참여 이력이 없습니다.")
@@ -815,7 +857,7 @@ elif st.session_state.user_role == 'staff':
             if record_view.empty:
                 st.info("조건에 맞는 기록이 없습니다.")
             else:
-                record_display = split_timestamp_columns(record_view[["id", "event_name", "student_id", "name", "timestamp", "operator"]], date_label="날짜", time_label="시간")
+                record_display = split_timestamp_columns(record_view[["id", "event_name", "participant_type", "student_id", "name", "timestamp", "operator"]], date_label="날짜", time_label="시간")
                 st.dataframe(record_display, use_container_width=True, hide_index=True)
                 record_labels = {f"#{int(row['id'])} · {row['event_name']} · {row['student_id']} {row['name']} · {row['timestamp']}": int(row['id']) for _, row in record_view.iterrows()}
                 selected_record_labels = st.multiselect("삭제할 기록 선택", list(record_labels.keys()), key="bulk_delete_records", placeholder="삭제할 기록을 선택하세요")
@@ -867,11 +909,22 @@ elif st.session_state.user_role == 'staff':
                 new_name = st.text_input("행사명", placeholder="예: 독서의 달 행사", key="new_event_name")
                 new_type = st.selectbox("행사 종류", ["독서·독서토론", "도서관 이용 교육", "독서 문화 행사", "전시·캠페인", "대회·공모전", "기타"], key="new_event_type")
                 new_description = st.text_area("행사 설명", placeholder="행사 내용, 참여 대상, 안내 사항 등을 적어 주세요.", key="new_event_description", height=110)
+                new_type_count = st.number_input("행사 유형 개수", min_value=1, max_value=30, value=1, step=1, key="new_event_type_count")
+                new_type_names = []
+                for i in range(int(new_type_count)):
+                    new_type_names.append(st.text_input(f"{i+1}번 유형 이름", placeholder=f"예: 유형 {i+1}의 이름", key=f"new_event_type_name_{i}"))
                 if st.button("행사 만들기"):
-                    if new_name.strip():
-                        db_add_event(new_name.strip(), "진행 중", now_seoul().strftime("%Y-%m-%d %H:%M:%S"), new_type, new_description.strip())
-                        db_add_log("행사 생성", f"신규 행사 [{new_name.strip()}] 생성", st.session_state.staff_info); st.success("행사가 개설되었습니다."); st.rerun()
-                    else: st.warning("행사명을 입력해 주세요.")
+                    if not new_name.strip():
+                        st.warning("행사명을 입력해 주세요.")
+                    elif any(not x.strip() for x in new_type_names):
+                        st.warning("모든 행사 유형의 이름을 입력해 주세요.")
+                    elif len(set(x.strip() for x in new_type_names)) != len(new_type_names):
+                        st.warning("유형 이름은 서로 다르게 입력해 주세요.")
+                    elif not db_get_events().empty and new_name.strip() in db_get_events()["name"].astype(str).tolist():
+                        st.warning("같은 행사명이 이미 있습니다. 기존 행사를 수정하거나 다른 행사명을 입력해 주세요.")
+                    else:
+                        db_add_event(new_name.strip(), "진행 중", now_seoul().strftime("%Y-%m-%d %H:%M:%S"), new_type, new_description.strip(), [x.strip() for x in new_type_names])
+                        db_add_log("행사 생성", f"신규 행사 [{new_name.strip()}] 생성 · 유형 {len(new_type_names)}개", st.session_state.staff_info); st.success("행사가 개설되었습니다."); st.rerun()
         with list_col:
             st.markdown("### 개설된 행사 목록")
             events = db_get_events()
@@ -880,7 +933,7 @@ elif st.session_state.user_role == 'staff':
                 with st.container(border=True):
                     name_col, status_col, action_col, delete_col = st.columns([3, 1.2, 1.2, 1.1])
                     name_col.markdown(f"**{ev['name']}**")
-                    name_col.caption(f"{ev.get('event_type', '기타')} · {ev.get('description', '')}")
+                    name_col.caption(f"{ev.get('event_type', '기타')} · 유형 {len(parse_type_names(ev.get('type_names', '[]')))}개 · {ev.get('description', '')}")
                     with st.expander("행사 정보 수정", expanded=st.session_state.get(f"edit_event_open_{ev['id']}", False)):
                         event_types = ["독서·독서토론", "도서관 이용 교육", "독서 문화 행사", "전시·캠페인", "대회·공모전", "기타"]
                         current_type = str(ev.get("event_type", "기타"))
@@ -890,13 +943,28 @@ elif st.session_state.user_role == 'staff':
                             edited_name = st.text_input("행사명", value=str(ev["name"]), key=f"edit_event_name_{ev['id']}")
                             edited_type = st.selectbox("행사 종류", event_types, index=event_types.index(current_type), key=f"edit_event_type_{ev['id']}")
                             edited_description = st.text_area("행사 설명", value=str(ev.get("description", "") or ""), height=100, key=f"edit_event_description_{ev['id']}")
+                            old_type_names = parse_type_names(ev.get("type_names", "[]")) or ["미지정"]
+                            has_event_records = False
+                            with get_db_connection() as conn:
+                                has_event_records = conn.execute("SELECT 1 FROM participants WHERE event_name=? LIMIT 1", (str(ev["name"]),)).fetchone() is not None
+                            st.caption("참여 기록이 있어 유형 개수와 이름은 변경할 수 없습니다." if has_event_records else "참여 기록이 없으므로 유형 개수와 이름을 수정할 수 있습니다.")
+                            edited_type_count = st.number_input("행사 유형 개수", min_value=1, max_value=30, value=len(old_type_names), step=1, key=f"edit_event_type_count_{ev['id']}", disabled=has_event_records)
+                            edited_type_names = []
+                            for i in range(int(edited_type_count)):
+                                default_type_name = old_type_names[i] if i < len(old_type_names) else ""
+                                edited_type_names.append(st.text_input(f"{i+1}번 유형 이름", value=default_type_name, key=f"edit_event_type_name_{ev['id']}_{i}", disabled=has_event_records))
                             save_event = st.form_submit_button("수정 내용 저장")
                         if save_event:
                             if not edited_name.strip():
                                 st.warning("행사명을 입력해 주세요.")
+                            elif not has_event_records and any(not x.strip() for x in edited_type_names):
+                                st.warning("모든 행사 유형의 이름을 입력해 주세요.")
+                            elif not has_event_records and len(set(x.strip() for x in edited_type_names)) != len(edited_type_names):
+                                st.warning("유형 이름은 서로 다르게 입력해 주세요.")
                             else:
                                 old_name = str(ev["name"])
-                                db_update_event_details(int(ev["id"]), old_name, edited_name.strip(), edited_type, edited_description.strip())
+                                final_type_names = old_type_names if has_event_records else [x.strip() for x in edited_type_names]
+                                db_update_event_details(int(ev["id"]), old_name, edited_name.strip(), edited_type, edited_description.strip(), final_type_names)
                                 db_add_log("행사 정보 수정", f"행사 [{old_name}] 정보 수정" + (f" → [{edited_name.strip()}]" if old_name != edited_name.strip() else ""), st.session_state.staff_info)
                                 st.success("행사 정보가 수정되었습니다.")
                                 st.rerun()
@@ -945,7 +1013,10 @@ elif st.session_state.user_role == 'staff':
                 with sd1: stat_from = st.date_input("시작 날짜", value=min_date, key="stat_from")
                 with sd2: stat_to = st.date_input("종료 날짜", value=max_date, key="stat_to")
             filtered = df_all.copy()
+            type_values = sorted(filtered["participant_type"].fillna("미지정").astype(str).unique().tolist())
+            stat_types = st.multiselect("행사 유형 필터", type_values, default=[], key="stat_types")
             if stat_events: filtered = filtered[filtered["event_name"].astype(str).isin(stat_events)]
+            if stat_types: filtered = filtered[filtered["participant_type"].fillna("미지정").astype(str).isin(stat_types)]
             if stat_grades: filtered = filtered[pd.to_numeric(filtered["grade"], errors="coerce").isin(stat_grades)]
             if stat_classes: filtered = filtered[pd.to_numeric(filtered["class"], errors="coerce").isin(stat_classes)]
             if stat_operator != "전체": filtered = filtered[filtered["operator"].astype(str) == stat_operator]
